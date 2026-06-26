@@ -1,7 +1,7 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 
-let cachedErAdminClient: SupabaseClient | null = null;
-
+// No module-level cache — read env vars at call time for Cloudflare Workers
+// compatibility (OpenNext populates process.env on first request, not at module load).
 export function isErSupabaseConfigured() {
   return Boolean(
     process.env.ER_SUPABASE_URL?.trim() &&
@@ -9,7 +9,7 @@ export function isErSupabaseConfigured() {
   );
 }
 
-export function getErSupabaseAdmin() {
+export function getErSupabaseAdmin(): SupabaseClient | null {
   const supabaseUrl = process.env.ER_SUPABASE_URL;
   const serviceRoleKey = process.env.ER_SUPABASE_SERVICE_ROLE_KEY;
 
@@ -17,12 +17,10 @@ export function getErSupabaseAdmin() {
     return null;
   }
 
-  cachedErAdminClient ??= createClient(supabaseUrl, serviceRoleKey, {
+  return createClient(supabaseUrl, serviceRoleKey, {
     auth: {
       persistSession: false,
       autoRefreshToken: false,
     },
   });
-
-  return cachedErAdminClient;
 }

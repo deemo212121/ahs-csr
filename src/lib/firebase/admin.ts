@@ -20,7 +20,8 @@ interface JWKS {
   keys: JWK[];
 }
 
-// Simple in-memory cache for public keys (keyed by kid)
+// Simple in-memory cache for Google's public signing keys (keyed by kid).
+// Safe to cache at module level — these are Google's public keys, not env vars.
 let cachedKeys: Map<string, CryptoKey> | null = null;
 let keyCacheExpiry = 0;
 
