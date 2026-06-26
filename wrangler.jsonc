@@ -35,6 +35,8 @@
     "TICKET_DATABASE_MODE": "er_supabase",
     "ER_SUPABASE_URL": "https://vrgeuuiygskqtrotemir.supabase.co",
     "ER_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZyZ2V1dWl5Z3NrcXRyb3RlbWlyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE2NDcyMjEsImV4cCI6MjA5NzIyMzIyMX0.R8NSv3I6ZZO_LHg1tYNJp0iSjpx7PiKUB9OEmn67A58",
+    "ER_SUPABASE_SERVICE_ROLE_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZyZ2V1dWl5Z3NrcXRyb3RlbWlyIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4MTY0NzIyMSwiZXhwIjoyMDk3MjIzMjIxfQ.K4yHxT_GwQ4PgF9WjGiMsfgxdrv9mQgbj2ji2WIwU-8",
+    "SUPABASE_SERVICE_ROLE_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh1amV2aHJ1ZXB0d2x2aXVqZm93Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4MTc5NTQxNywiZXhwIjoyMDk3MzcxNDE3fQ.WK0wnzKa0KJ8Zdj_nzFRZAcsvvClMEkzs_-mXtrE53g",
     "ER_SUPABASE_TOKEN_URL": "https://tanstack-start-app.jdage7.workers.dev/api/supabase-token",
     "ER_SUPABASE_TICKETS_TABLE": "tickets",
     "ER_SUPABASE_CUSTOMERS_TABLE": "customers",
