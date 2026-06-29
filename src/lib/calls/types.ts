@@ -67,7 +67,7 @@ export type IceServerConfig = {
 
 export type IceServersResponse = {
   iceServers: IceServerConfig[];
-  provider: 'metered' | 'static' | 'fallback';
+  provider: 'cloudflare' | 'metered' | 'static' | 'fallback';
   configured: boolean;
   message?: string;
 };
