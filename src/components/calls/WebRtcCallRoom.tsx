@@ -245,6 +245,11 @@ export function WebRtcCallRoom({ call, participantRole, onCallEnded }: WebRtcCal
     let cancelled = false;
     let signalTimer: number | null = null;
     let heartbeatTimer: number | null = null;
+    let recoveryTimer: number | null = null;
+    let unstableSince: number | null = null;
+    const DISCONNECT_GRACE_MS = 10000;
+    const RESTART_RETRY_MS = 8000;
+    const UNRECOVERABLE_AFTER_MS = 45000;
     lastSignalAtRef.current = signalBaseline(call);
     processedSignalsRef.current = new Set();
     pendingCandidatesRef.current = [];
@@ -256,6 +261,38 @@ export function WebRtcCallRoom({ call, participantRole, onCallEnded }: WebRtcCal
 
     function log(message: string) {
       console.debug(`[webrtc:${participantRole}] ${message} at ${new Date().toISOString()}`);
+    }
+
+    function clearRecoveryTimer() {
+      if (recoveryTimer) {
+        window.clearTimeout(recoveryTimer);
+        recoveryTimer = null;
+      }
+    }
+
+    async function logSelectedCandidatePair(peer: RTCPeerConnection) {
+      try {
+        const stats = await peer.getStats();
+        let activePair: any = null;
+        stats.forEach((report: any) => {
+          if (report.type === 'candidate-pair' && report.nominated && report.state === 'succeeded') {
+            activePair = report;
+          }
+        });
+        if (!activePair) {
+          log('getStats(): no nominated/succeeded candidate pair found yet');
+          return;
+        }
+        const local = stats.get(activePair.localCandidateId) as any;
+        const remote = stats.get(activePair.remoteCandidateId) as any;
+        log(
+          `selected candidate pair — local: ${local?.candidateType ?? 'unknown'} (${local?.protocol ?? '?'}), ` +
+            `remote: ${remote?.candidateType ?? 'unknown'} (${remote?.protocol ?? '?'})` +
+            `${local?.candidateType === 'relay' || remote?.candidateType === 'relay' ? ' — TURN relay in use' : ' — direct/STUN path, no relay needed'}`,
+        );
+      } catch (error) {
+        log(`getStats() failed: ${error instanceof Error ? error.message : String(error)}`);
+      }
     }
 
     async function flushPendingCandidates() {
@@ -310,8 +347,11 @@ export function WebRtcCallRoom({ call, participantRole, onCallEnded }: WebRtcCal
         log(`connectionState -> ${peer.connectionState}`);
         setConnectionState(peer.connectionState);
         if (peer.connectionState === 'connected') {
+          unstableSince = null;
+          clearRecoveryTimer();
           setStatus('Connected — live audio is running.');
           tryStartRecording();
+          void logSelectedCandidatePair(peer);
           if (!startSentRef.current) {
             startSentRef.current = true;
             void patchCall('start');
@@ -319,13 +359,17 @@ export function WebRtcCallRoom({ call, participantRole, onCallEnded }: WebRtcCal
         }
         if (peer.connectionState === 'disconnected') {
           // Often transient (a few seconds of dropped STUN keepalives). Browsers
-          // routinely recover from this on their own; do not force a renegotiation
-          // here, since that itself can re-trigger this same state and loop forever.
+          // routinely recover from this on their own. Give it a grace window before
+          // we proactively restart, instead of acting immediately or waiting forever.
+          if (unstableSince === null) unstableSince = Date.now();
           setStatus('Connection is unstable. Waiting to see if it recovers...');
+          scheduleRecoveryCheck(DISCONNECT_GRACE_MS);
         }
         if (peer.connectionState === 'failed') {
+          if (unstableSince === null) unstableSince = Date.now();
           setStatus('Connection dropped. Reconnecting...');
           void restartConnection();
+          scheduleRecoveryCheck(RESTART_RETRY_MS);
         }
       };
 
@@ -374,7 +418,7 @@ export function WebRtcCallRoom({ call, participantRole, onCallEnded }: WebRtcCal
         return;
       }
       if (restartInFlightRef.current) return;
-      if (Date.now() - lastRestartAtRef.current < 8000) return;
+      if (Date.now() - lastRestartAtRef.current < RESTART_RETRY_MS) return;
       if (peer.signalingState !== 'stable') return;
 
       log('restartIce triggered (connectionState was failed)');
@@ -396,6 +440,48 @@ export function WebRtcCallRoom({ call, participantRole, onCallEnded }: WebRtcCal
       } finally {
         restartInFlightRef.current = false;
       }
+    }
+
+    async function giveUp(reason: string) {
+      log(`Unrecoverable — ${reason}`);
+      clearRecoveryTimer();
+      setStatus('Connection lost. Ending call...');
+      try {
+        await postSignal('hangup', { reason });
+        await patchCall('end', reason);
+      } catch {
+        // Best effort — we're tearing down the room regardless.
+      } finally {
+        cleanup();
+        setConnectionState('closed');
+        setStatus('Call ended — connection could not be recovered.');
+        onCallEndedRef.current?.();
+      }
+    }
+
+    function scheduleRecoveryCheck(delayMs: number) {
+      clearRecoveryTimer();
+      recoveryTimer = window.setTimeout(() => {
+        recoveryTimer = null;
+        if (cancelled) return;
+        const peer = pcRef.current;
+        if (!peer || peer.connectionState === 'closed') return;
+
+        if (peer.connectionState === 'connected') {
+          unstableSince = null;
+          return;
+        }
+
+        if (unstableSince && Date.now() - unstableSince > UNRECOVERABLE_AFTER_MS) {
+          void giveUp(`stuck in "${peer.connectionState}" for over ${Math.round(UNRECOVERABLE_AFTER_MS / 1000)}s with no recovery.`);
+          return;
+        }
+
+        if (peer.connectionState === 'disconnected' || peer.connectionState === 'failed') {
+          void restartConnection();
+          scheduleRecoveryCheck(RESTART_RETRY_MS);
+        }
+      }, delayMs);
     }
 
     async function handleSignal(signal: RtcSignal) {
@@ -495,6 +581,7 @@ export function WebRtcCallRoom({ call, participantRole, onCallEnded }: WebRtcCal
       cancelled = true;
       if (signalTimer) window.clearInterval(signalTimer);
       if (heartbeatTimer) window.clearInterval(heartbeatTimer);
+      clearRecoveryTimer();
       cleanup();
     };
   }, [call.accepted_at, call.id, call.queued_at, canJoin, cleanup, participantRole, patchCall, postSignal, signalSessionId, tryStartRecording, user]);
