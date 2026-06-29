@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { getAuthContext, localProfileId, requireRole, type AuthContext } from '@/lib/auth/server';
+import { getAuthContext, requireRole, type AuthContext } from '@/lib/auth/server';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 
 const callSelect = `
@@ -34,22 +34,9 @@ function displayName(context: AuthContext) {
   return [context.profile.first_name, context.profile.last_name].filter(Boolean).join(' ') || context.profile.email || 'Staff';
 }
 
-function normalizeTimestamp(value: string | null | undefined) {
-  if (!value) return null;
-  const trimmed = value.trim();
-  const fixedTimezone = trimmed.replace(
-    /(\d|\.\d+)\s+([+-]?\d{2}:?\d{2})$/,
-    (_match, prefix: string, timezone: string) => `${prefix}${timezone.startsWith('-') || timezone.startsWith('+') ? timezone : `+${timezone}`}`,
-  );
-  const parsed = new Date(fixedTimezone);
-  if (!Number.isFinite(parsed.getTime())) return null;
-  return parsed.toISOString();
-}
-
 function durationSeconds(startedAt?: string | null) {
-  const normalizedStartedAt = normalizeTimestamp(startedAt);
-  if (!normalizedStartedAt) return 0;
-  const started = new Date(normalizedStartedAt).getTime();
+  if (!startedAt) return 0;
+  const started = new Date(startedAt).getTime();
   if (!Number.isFinite(started)) return 0;
   return Math.max(0, Math.round((Date.now() - started) / 1000));
 }
@@ -59,10 +46,10 @@ function missingCallSchemaMessage(error: unknown) {
   if (
     message.includes('Could not find') ||
     message.includes('column') ||
-    message.includes('call_requests') ||
+    message.includes('rtc_calls') ||
     message.includes('relation')
   ) {
-    return 'Web call queue database setup is not installed yet. Run supabase/webrtc_call_queue_setup.sql in your main Supabase database.';
+    return 'Web call queue database setup is not installed yet. Run supabase/rtc_calls_setup.sql in your main Supabase database.';
   }
   return null;
 }
@@ -79,7 +66,7 @@ export async function PATCH(
     const body = patchSchema.parse(await request.json());
     const supabaseAdmin = getSupabaseAdmin();
     const { data: call, error: loadError } = await supabaseAdmin
-      .from('call_requests')
+      .from('rtc_calls')
       .select(callSelect)
       .eq('id', id)
       .single();
@@ -91,10 +78,6 @@ export async function PATCH(
     if (!isCustomerOwner && !isStaff) throw new Error('You do not have access to this call.');
 
     const now = new Date().toISOString();
-    const acceptedAt = normalizeTimestamp(call.accepted_at);
-    const callStartedAt = normalizeTimestamp(call.call_started_at);
-    const staffJoinedAt = normalizeTimestamp(call.staff_joined_at);
-    const customerJoinedAt = normalizeTimestamp(call.customer_joined_at);
     let updates: Record<string, unknown> = {};
 
     if (body.action === 'accept') {
@@ -103,14 +86,12 @@ export async function PATCH(
         throw new Error('This call is no longer active.');
       }
       await supabaseAdmin
-        .from('call_signals')
+        .from('rtc_signals')
         .delete()
-        .eq('call_request_id', id);
+        .eq('call_id', id);
       updates = {
         status: 'accepted',
-        browser_call_status: 'ringing',
-        accepted_at: acceptedAt ?? now,
-        accepted_by: localProfileId(auth),
+        accepted_at: call.accepted_at ?? now,
         accepted_by_profile_id: staffProfileKey(auth),
         accepted_by_name: displayName(auth),
         accepted_by_role: auth.role,
@@ -121,17 +102,16 @@ export async function PATCH(
 
     if (body.action === 'start') {
       updates = {
-        browser_call_status: 'connected',
-        call_started_at: callStartedAt ?? now,
-        ...(isStaff ? { staff_joined_at: staffJoinedAt ?? now, last_staff_seen_at: now } : {}),
-        ...(isCustomerOwner ? { customer_joined_at: customerJoinedAt ?? now, last_customer_seen_at: now } : {}),
+        call_started_at: call.call_started_at ?? now,
+        ...(isStaff ? { staff_joined_at: call.staff_joined_at ?? now, last_staff_seen_at: now } : {}),
+        ...(isCustomerOwner ? { customer_joined_at: call.customer_joined_at ?? now, last_customer_seen_at: now } : {}),
       };
     }
 
     if (body.action === 'heartbeat') {
       updates = isStaff ? { last_staff_seen_at: now } : { last_customer_seen_at: now };
-      if (isStaff && !staffJoinedAt) updates.staff_joined_at = now;
-      if (isCustomerOwner && !customerJoinedAt) updates.customer_joined_at = now;
+      if (isStaff && !call.staff_joined_at) updates.staff_joined_at = now;
+      if (isCustomerOwner && !call.customer_joined_at) updates.customer_joined_at = now;
     }
 
     if (body.action === 'end' || body.action === 'cancel') {
@@ -139,17 +119,15 @@ export async function PATCH(
       const finalStatus = body.action === 'cancel' && isCustomerOwner && !call.call_started_at ? 'cancelled' : 'completed';
       updates = {
         status: finalStatus,
-        browser_call_status: 'ended',
-        completed_at: now,
         call_ended_at: now,
-        call_duration_seconds: durationSeconds(callStartedAt),
+        call_duration_seconds: durationSeconds(call.call_started_at),
         ended_by_profile_id: auth.role === 'customer' ? `local:${auth.profile.id}` : staffProfileKey(auth),
         ended_reason: body.reason || (finalStatus === 'cancelled' ? 'Customer cancelled before connection.' : 'Call ended.'),
       };
     }
 
     const { data, error } = await supabaseAdmin
-      .from('call_requests')
+      .from('rtc_calls')
       .update(updates)
       .eq('id', id)
       .select('*')

@@ -3,9 +3,9 @@ import { z } from 'zod';
 import { getAuthContext, requireRole } from '@/lib/auth/server';
 import { getErSupabaseAdmin, isErSupabaseConfigured } from '@/lib/supabase/er-admin';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
-import type { CallQueueItem, CallRequestStatus } from '@/lib/calls/types';
+import type { RtcCall, RtcCallStatus } from '@/lib/calls/types';
 
-const openCallStatuses: CallRequestStatus[] = ['manager_queue', 'assigned', 'accepted'];
+const openCallStatuses: RtcCallStatus[] = ['manager_queue', 'assigned', 'accepted'];
 
 const callSelect = `
   id,
@@ -16,27 +16,16 @@ const callSelect = `
   phone_number,
   notes,
   call_reason,
-  call_direction,
   branch,
   city,
   state,
   zip_code,
   status,
-  provider,
-  room_token,
-  room_name,
-  call_mode,
-  browser_call_status,
   queued_at,
-  assigned_at,
   accepted_at,
-  completed_at,
   call_started_at,
   call_ended_at,
   call_duration_seconds,
-  recording_path,
-  recording_mime,
-  recording_uploaded_at,
   accepted_by_profile_id,
   accepted_by_name,
   accepted_by_role,
@@ -47,7 +36,6 @@ const callSelect = `
   ended_by_profile_id,
   ended_reason,
   created_at,
-  updated_at,
   request:service_requests(id, request_number)
 `;
 
@@ -98,11 +86,10 @@ function missingCallSchemaMessage(error: unknown) {
   if (
     message.includes('Could not find') ||
     message.includes('column') ||
-    message.includes('call_signals') ||
-    message.includes('call_requests') ||
+    message.includes('rtc_calls') ||
     message.includes('relation')
   ) {
-    return 'Web call queue database setup is not installed yet. Run supabase/webrtc_call_queue_setup.sql in your main Supabase database.';
+    return 'Web call queue database setup is not installed yet. Run supabase/rtc_calls_setup.sql in your main Supabase database.';
   }
   return null;
 }
@@ -114,7 +101,7 @@ function getRequestNumber(row: RawCallRow) {
   return nullableText(request.request_number);
 }
 
-function mapCallRow(row: RawCallRow): CallQueueItem {
+function mapCallRow(row: RawCallRow): RtcCall {
   return {
     id: String(row.id),
     request_id: nullableText(row.request_id),
@@ -122,30 +109,19 @@ function mapCallRow(row: RawCallRow): CallQueueItem {
     customer_id: nullableText(row.customer_id),
     customer_name: text(row.customer_name) || 'Customer',
     customer_email: nullableText(row.customer_email),
-    phone_number: text(row.phone_number),
+    phone_number: nullableText(row.phone_number),
     notes: nullableText(row.notes),
     call_reason: nullableText(row.call_reason),
-    call_direction: row.call_direction === 'outbound' ? 'outbound' : 'inbound',
     branch: nullableText(row.branch),
     city: nullableText(row.city),
     state: nullableText(row.state),
     zip_code: nullableText(row.zip_code),
-    status: (row.status || 'manager_queue') as CallRequestStatus,
-    provider: nullableText(row.provider),
-    room_token: nullableText(row.room_token),
-    room_name: nullableText(row.room_name),
-    call_mode: nullableText(row.call_mode),
-    browser_call_status: row.browser_call_status || 'idle',
+    status: (row.status || 'manager_queue') as RtcCallStatus,
     queued_at: row.queued_at,
-    assigned_at: row.assigned_at ?? null,
     accepted_at: row.accepted_at ?? null,
-    completed_at: row.completed_at ?? null,
     call_started_at: row.call_started_at ?? null,
     call_ended_at: row.call_ended_at ?? null,
     call_duration_seconds: typeof row.call_duration_seconds === 'number' ? row.call_duration_seconds : null,
-    recording_path: nullableText(row.recording_path),
-    recording_mime: nullableText(row.recording_mime),
-    recording_uploaded_at: row.recording_uploaded_at ?? null,
     accepted_by_profile_id: nullableText(row.accepted_by_profile_id),
     accepted_by_name: nullableText(row.accepted_by_name),
     accepted_by_role: nullableText(row.accepted_by_role),
@@ -156,7 +132,6 @@ function mapCallRow(row: RawCallRow): CallQueueItem {
     ended_by_profile_id: nullableText(row.ended_by_profile_id),
     ended_reason: nullableText(row.ended_reason),
     created_at: row.created_at,
-    updated_at: row.updated_at,
   };
 }
 
@@ -233,7 +208,7 @@ async function getRequestHint(customerId: string, requestId?: string) {
   return (data?.[0] ?? null) as ServiceRequestHint | null;
 }
 
-async function listBranchesFromCalls(calls: CallQueueItem[]) {
+async function listBranchesFromCalls(calls: RtcCall[]) {
   const branches = new Set<string>();
   calls.forEach((call) => {
     if (call.branch) branches.add(call.branch);
@@ -241,7 +216,7 @@ async function listBranchesFromCalls(calls: CallQueueItem[]) {
 
   try {
     const { data } = await getSupabaseAdmin()
-      .from('call_requests')
+      .from('rtc_calls')
       .select('branch')
       .not('branch', 'is', null)
       .order('branch', { ascending: true })
@@ -266,11 +241,11 @@ export async function GET(request: NextRequest) {
     const url = new URL(request.url);
     const history = url.searchParams.get('history') === 'true';
     const limit = Math.min(Math.max(Number(url.searchParams.get('limit') ?? 80), 1), 250);
-    const status = url.searchParams.get('status') as CallRequestStatus | null;
+    const status = url.searchParams.get('status') as RtcCallStatus | null;
     const supabaseAdmin = getSupabaseAdmin();
 
     let query = supabaseAdmin
-      .from('call_requests')
+      .from('rtc_calls')
       .select(callSelect)
       .order('queued_at', { ascending: false })
       .limit(limit);
@@ -310,7 +285,7 @@ export async function POST(request: NextRequest) {
     const supabaseAdmin = getSupabaseAdmin();
 
     const existing = await supabaseAdmin
-      .from('call_requests')
+      .from('rtc_calls')
       .select(callSelect)
       .eq('customer_id', context.profile.id)
       .in('status', openCallStatuses)
@@ -336,7 +311,7 @@ export async function POST(request: NextRequest) {
       text(body.phone_number) ||
       text(context.profile.phone_number) ||
       text(requestHint?.phone_number) ||
-      'WebRTC audio only';
+      null;
 
     const zipCode = normalizeZip(body.zip_code || context.profile.zip_code || requestHint?.zip_code);
     const city = nullableText(body.city || context.profile.city || requestHint?.city);
@@ -346,10 +321,9 @@ export async function POST(request: NextRequest) {
       nullableText(requestHint?.region) ||
       (await resolveBranchFromZip(zipCode, city)) ||
       nullableText(context.profile.region);
-    const token = crypto.randomUUID();
 
     const { data, error } = await supabaseAdmin
-      .from('call_requests')
+      .from('rtc_calls')
       .insert({
         request_id: requestHint?.id ?? body.request_id ?? null,
         customer_id: context.profile.id,
@@ -358,17 +332,11 @@ export async function POST(request: NextRequest) {
         phone_number: phoneNumber,
         notes: body.notes || null,
         call_reason: body.call_reason || requestHint?.issue_description || 'Customer requested a live web call.',
-        call_direction: 'inbound',
         branch,
         city,
         state,
         zip_code: zipCode || null,
         status: 'manager_queue',
-        provider: 'metered_turn',
-        room_token: token,
-        room_name: `ushs-web-call-${token.slice(0, 8)}`,
-        call_mode: 'browser_webrtc',
-        browser_call_status: 'ringing',
         queued_at: new Date().toISOString(),
       })
       .select(callSelect)

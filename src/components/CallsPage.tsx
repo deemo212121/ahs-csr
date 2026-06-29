@@ -8,7 +8,6 @@ import {
   ChevronDown,
   Clock3,
   ClipboardPlus,
-  FileAudio,
   Headphones,
   Info,
   MapPin,
@@ -22,7 +21,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import { fetchJsonWithFirebase } from '@/lib/auth/client';
-import type { CallQueueItem, CallQueueResponse, CallRequestStatus } from '@/lib/calls/types';
+import type { RtcCall, RtcCallListResponse, RtcCallStatus } from '@/lib/calls/types';
 import { WebRtcCallRoom } from '@/components/calls/WebRtcCallRoom';
 
 type ServiceAreasResponse = {
@@ -30,7 +29,7 @@ type ServiceAreasResponse = {
   locations?: Array<{ location?: string | null }>;
 };
 
-const statusOptions: Array<{ value: 'open' | CallRequestStatus | 'history'; label: string }> = [
+const statusOptions: Array<{ value: 'open' | RtcCallStatus | 'history'; label: string }> = [
   { value: 'open', label: 'Open calls' },
   { value: 'manager_queue', label: 'Waiting' },
   { value: 'accepted', label: 'In room' },
@@ -51,7 +50,7 @@ function timeAgo(value?: string | null) {
   return new Date(value).toLocaleDateString();
 }
 
-function statusLabel(status: CallRequestStatus) {
+function statusLabel(status: RtcCallStatus) {
   if (status === 'manager_queue') return 'Waiting';
   if (status === 'accepted') return 'In room';
   return status.replace('_', ' ');
@@ -95,13 +94,13 @@ type QuickManualForm = {
   special_request: string;
 };
 
-function quickManualInitial(call: CallQueueItem | null): QuickManualForm {
+function quickManualInitial(call: RtcCall | null): QuickManualForm {
   return {
     request_number: '',
     fake_ticket: false,
     ticket_source: 'Phone Call',
     full_name: call?.customer_name || '',
-    phone_number: call?.phone_number && call.phone_number !== 'WebRTC audio only' ? call.phone_number : '',
+    phone_number: call?.phone_number || '',
     secondary_phone: '',
     customer_email: call?.customer_email || '',
     service_address: '',
@@ -129,7 +128,7 @@ function QuickManualTicketPanel({
   call,
   onClose,
 }: {
-  call: CallQueueItem | null;
+  call: RtcCall | null;
   onClose: () => void;
 }) {
   const { user } = useAuth();
@@ -247,14 +246,6 @@ function QuickManualTicketPanel({
   );
 }
 
-type RecordingResponse = {
-  recording: null | {
-    signed_url: string;
-    mime: string | null;
-    uploaded_at: string | null;
-  };
-};
-
 function formatDateTime(value?: string | null) {
   if (!value) return '—';
   return new Date(value).toLocaleString([], {
@@ -277,38 +268,9 @@ function CallDetailsModal({
   call,
   onClose,
 }: {
-  call: CallQueueItem;
+  call: RtcCall;
   onClose: () => void;
 }) {
-  const { user } = useAuth();
-  const [recordingUrl, setRecordingUrl] = useState<string | null>(null);
-  const [recordingMessage, setRecordingMessage] = useState('Loading recording...');
-
-  useEffect(() => {
-    let cancelled = false;
-    async function loadRecording() {
-      if (!user) return;
-      setRecordingMessage('Loading recording...');
-      setRecordingUrl(null);
-      try {
-        const data = await fetchJsonWithFirebase<RecordingResponse>(user, `/api/calls/${call.id}/recording`);
-        if (cancelled) return;
-        if (data.recording?.signed_url) {
-          setRecordingUrl(data.recording.signed_url);
-          setRecordingMessage(data.recording.uploaded_at ? `Uploaded ${formatDateTime(data.recording.uploaded_at)}` : 'Recording ready');
-        } else {
-          setRecordingMessage('No recording uploaded yet.');
-        }
-      } catch (error) {
-        if (!cancelled) setRecordingMessage(error instanceof Error ? error.message : 'Unable to load recording.');
-      }
-    }
-    void loadRecording();
-    return () => {
-      cancelled = true;
-    };
-  }, [call.id, user]);
-
   return (
     <div className="call-manual-backdrop" role="presentation" onClick={onClose}>
       <section className="call-details-modal" role="dialog" aria-modal="true" onClick={(event) => event.stopPropagation()}>
@@ -332,17 +294,6 @@ function CallDetailsModal({
           <div><span>Email</span><strong>{call.customer_email || '—'}</strong></div>
         </div>
 
-        <section className="call-recording-card">
-          <div>
-            <FileAudio size={22} />
-            <div>
-              <strong>Recorded Audio</strong>
-              <p>{recordingMessage}</p>
-            </div>
-          </div>
-          {recordingUrl ? <audio controls src={recordingUrl} /> : null}
-        </section>
-
         <section className="call-details-notes">
           <h3><CalendarDays size={16} /> Notes</h3>
           <p>{call.call_reason || call.notes || 'No notes saved for this call.'}</p>
@@ -355,15 +306,15 @@ function CallDetailsModal({
 
 export function CallsPage() {
   const { user, role } = useAuth();
-  const [calls, setCalls] = useState<CallQueueItem[]>([]);
-  const [historyCalls, setHistoryCalls] = useState<CallQueueItem[]>([]);
+  const [calls, setCalls] = useState<RtcCall[]>([]);
+  const [historyCalls, setHistoryCalls] = useState<RtcCall[]>([]);
   const [branches, setBranches] = useState<string[]>([]);
   const [selectedBranches, setSelectedBranches] = useState<string[]>([]);
-  const [status, setStatus] = useState<'open' | CallRequestStatus | 'history'>('open');
+  const [status, setStatus] = useState<'open' | RtcCallStatus | 'history'>('open');
   const [search, setSearch] = useState('');
   const [branchMenuOpen, setBranchMenuOpen] = useState(false);
-  const [activeCall, setActiveCall] = useState<CallQueueItem | null>(null);
-  const [detailCall, setDetailCall] = useState<CallQueueItem | null>(null);
+  const [activeCall, setActiveCall] = useState<RtcCall | null>(null);
+  const [detailCall, setDetailCall] = useState<RtcCall | null>(null);
   const [manualOpen, setManualOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [historyLoading, setHistoryLoading] = useState(true);
@@ -379,7 +330,7 @@ export function CallsPage() {
     try {
       const history = status === 'history' || status === 'completed' || status === 'cancelled';
       const statusParam = status !== 'open' && status !== 'history' ? `&status=${status}` : '';
-      const data = await fetchJsonWithFirebase<CallQueueResponse>(
+      const data = await fetchJsonWithFirebase<RtcCallListResponse>(
         user,
         `/api/calls?limit=120${history ? '&history=true' : ''}${statusParam}`,
       );
@@ -400,7 +351,7 @@ export function CallsPage() {
     if (!user) return;
     if (!silent) setHistoryLoading(true);
     try {
-      const data = await fetchJsonWithFirebase<CallQueueResponse>(user, '/api/calls?history=true&limit=120');
+      const data = await fetchJsonWithFirebase<RtcCallListResponse>(user, '/api/calls?history=true&limit=120');
       if (data.setup_required) throw new Error(data.message || 'Web call queue setup is missing.');
       setHistoryCalls(data.calls);
       setDetailCall((current) => current ? data.calls.find((call) => call.id === current.id) ?? current : current);
@@ -456,9 +407,8 @@ export function CallsPage() {
 
   const historyMetrics = useMemo(() => {
     const total = historyCalls.length;
-    const withRecordings = historyCalls.filter((call) => call.recording_path || call.recording_uploaded_at).length;
     const completed = historyCalls.filter((call) => call.status === 'completed').length;
-    return { total, withRecordings, completed };
+    return { total, completed };
   }, [historyCalls]);
 
   const filteredCalls = useMemo(() => {
@@ -484,16 +434,16 @@ export function CallsPage() {
     });
   }, [calls, search, selectedBranches]);
 
-  async function acceptCall(call: CallQueueItem) {
+  async function acceptCall(call: RtcCall) {
     if (!user) return;
     setError(null);
     try {
-      const data = await fetchJsonWithFirebase<{ call: Partial<CallQueueItem> }>(user, `/api/calls/${call.id}`, {
+      const data = await fetchJsonWithFirebase<{ call: Partial<RtcCall> }>(user, `/api/calls/${call.id}`, {
         method: 'PATCH',
         body: JSON.stringify({ action: 'accept' }),
       });
       await loadCalls(true);
-      setActiveCall({ ...call, ...data.call, status: 'accepted', browser_call_status: 'ringing' } as CallQueueItem);
+      setActiveCall({ ...call, ...data.call, status: 'accepted' } as RtcCall);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to accept call.');
     }
@@ -655,12 +605,11 @@ export function CallsPage() {
           <div>
             <span className="call-eyebrow"><Clock3 size={14} /> CSR call history</span>
             <h2>All calls made through this call desk</h2>
-            <p>Click any call to view customer details, queue status, duration, and recorded audio.</p>
+            <p>Click any call to view customer details, queue status, and duration.</p>
           </div>
           <div className="call-history-stats">
             <span>{historyMetrics.total} total</span>
             <span>{historyMetrics.completed} completed</span>
-            <span>{historyMetrics.withRecordings} recordings</span>
           </div>
         </div>
 
@@ -682,10 +631,6 @@ export function CallsPage() {
               </div>
               <span>{call.accepted_by_name || 'No staff yet'}</span>
               <span>{formatCallDuration(call.call_duration_seconds)}</span>
-              <span className={call.recording_path ? 'recording-ready' : ''}>
-                <FileAudio size={14} />
-                {call.recording_path ? 'Recording' : 'No recording'}
-              </span>
             </button>
           ))}
         </div>

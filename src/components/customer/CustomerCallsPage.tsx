@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { BellRing, Clock3, Headphones, MapPin, PhoneCall, PhoneOff, RefreshCw, ShieldCheck } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import { fetchJsonWithFirebase } from '@/lib/auth/client';
-import type { CallQueueItem, CallQueueResponse } from '@/lib/calls/types';
+import type { RtcCall, RtcCallListResponse } from '@/lib/calls/types';
 import { WebRtcCallRoom } from '@/components/calls/WebRtcCallRoom';
 
 function timeLabel(value?: string | null) {
@@ -12,7 +12,7 @@ function timeLabel(value?: string | null) {
   return new Date(value).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
 }
 
-function statusCopy(call?: CallQueueItem | null) {
+function statusCopy(call?: RtcCall | null) {
   if (!call) return 'Ready';
   if (call.status === 'manager_queue') return 'Waiting for staff';
   if (call.status === 'accepted') return 'Staff answered';
@@ -23,7 +23,7 @@ function statusCopy(call?: CallQueueItem | null) {
 
 export function CustomerCallsPage() {
   const { user, profile } = useAuth();
-  const [calls, setCalls] = useState<CallQueueItem[]>([]);
+  const [calls, setCalls] = useState<RtcCall[]>([]);
   const [loading, setLoading] = useState(true);
   const [requesting, setRequesting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -40,7 +40,7 @@ export function CustomerCallsPage() {
     if (!silent) setLoading(true);
     setError(null);
     try {
-      const data = await fetchJsonWithFirebase<CallQueueResponse>(user, '/api/calls?history=true&limit=20');
+      const data = await fetchJsonWithFirebase<RtcCallListResponse>(user, '/api/calls?history=true&limit=20');
       if (data.setup_required) throw new Error(data.message || 'Web call queue setup is missing.');
       setCalls(data.calls);
     } catch (err) {
@@ -64,7 +64,7 @@ export function CustomerCallsPage() {
     setRequesting(true);
     setError(null);
     try {
-      const data = await fetchJsonWithFirebase<{ call: CallQueueItem; reused?: boolean }>(user, '/api/calls', {
+      const data = await fetchJsonWithFirebase<{ call: RtcCall; reused?: boolean }>(user, '/api/calls', {
         method: 'POST',
         body: JSON.stringify({
           call_reason: 'Customer requested a live web call from the customer portal.',

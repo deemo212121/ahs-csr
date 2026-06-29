@@ -4,28 +4,20 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Mic, MicOff, PhoneOff, Radio, ShieldCheck, Volume2, Wifi, WifiOff } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import { fetchJsonWithFirebase } from '@/lib/auth/client';
-import type { CallQueueItem, CallSignal, CallSignalType, IceServersResponse } from '@/lib/calls/types';
+import type { RtcCall, RtcSignal, RtcSignalType, IceServersResponse } from '@/lib/calls/types';
 
 type WebRtcCallRoomProps = {
-  call: CallQueueItem;
+  call: RtcCall;
   participantRole: 'customer' | 'staff';
   onCallEnded?: () => void;
 };
 
-type SignalResponse = { signals: CallSignal[] };
+type SignalResponse = { signals: RtcSignal[] };
 
 function formatDuration(seconds: number) {
   const mins = Math.floor(seconds / 60).toString().padStart(2, '0');
   const secs = Math.floor(seconds % 60).toString().padStart(2, '0');
   return `${mins}:${secs}`;
-}
-
-function recordingLabel(status: 'off' | 'recording' | 'saving' | 'saved' | 'failed') {
-  if (status === 'recording') return 'Recording';
-  if (status === 'saving') return 'Saving recording';
-  if (status === 'saved') return 'Recording saved';
-  if (status === 'failed') return 'Recording failed';
-  return 'Recording starts after connection';
 }
 
 function isDescription(value: unknown): value is RTCSessionDescriptionInit {
@@ -36,22 +28,9 @@ function isIceCandidate(value: unknown): value is RTCIceCandidateInit {
   return Boolean(value && typeof value === 'object' && 'candidate' in value);
 }
 
-function normalizeTimestamp(value: string | null | undefined) {
-  if (!value) return null;
-  const trimmed = value.trim();
-  const fixedTimezone = trimmed.replace(
-    /(\d|\.\d+)\s+([+-]?\d{2}:?\d{2})$/,
-    (_match, prefix: string, timezone: string) => `${prefix}${timezone.startsWith('-') || timezone.startsWith('+') ? timezone : `+${timezone}`}`,
-  );
-  const parsed = new Date(fixedTimezone);
-  if (!Number.isFinite(parsed.getTime())) return null;
-  return parsed.toISOString();
-}
-
-function signalBaseline(call: CallQueueItem) {
-  const source = call.accepted_at || call.updated_at || new Date().toISOString();
-  const normalizedSource = normalizeTimestamp(source) ?? source;
-  const time = new Date(normalizedSource).getTime();
+function signalBaseline(call: RtcCall) {
+  const source = call.accepted_at || call.queued_at || new Date().toISOString();
+  const time = new Date(source).getTime();
   if (!Number.isFinite(time)) return new Date(Date.now() - 10000).toISOString();
   return new Date(time - 30000).toISOString();
 }
@@ -60,12 +39,7 @@ export function WebRtcCallRoom({ call, participantRole, onCallEnded }: WebRtcCal
   const { user } = useAuth();
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const localStreamRef = useRef<MediaStream | null>(null);
-  const remoteStreamRef = useRef<MediaStream | null>(null);
   const remoteAudioRef = useRef<HTMLAudioElement | null>(null);
-  const recorderRef = useRef<MediaRecorder | null>(null);
-  const recordingChunksRef = useRef<Blob[]>([]);
-  const recordingContextRef = useRef<AudioContext | null>(null);
-  const recordingNodesRef = useRef<MediaStreamAudioSourceNode[]>([]);
   const processedSignalsRef = useRef<Set<string>>(new Set());
   const pendingCandidatesRef = useRef<RTCIceCandidateInit[]>([]);
   const lastSignalAtRef = useRef<string>(new Date(Date.now() - 3000).toISOString());
@@ -78,15 +52,14 @@ export function WebRtcCallRoom({ call, participantRole, onCallEnded }: WebRtcCal
   const [connectionState, setConnectionState] = useState<RTCPeerConnectionState>('new');
   const [muted, setMuted] = useState(false);
   const [roomError, setRoomError] = useState<string | null>(null);
-  const [recordingStatus, setRecordingStatus] = useState<'off' | 'recording' | 'saving' | 'saved' | 'failed'>('off');
   const [turnConfigured, setTurnConfigured] = useState<boolean | null>(null);
   const [elapsed, setElapsed] = useState(0);
 
   const canJoin = call.status === 'accepted' || call.status === 'assigned';
   const roleLabel = participantRole === 'customer' ? 'Customer' : 'Staff';
   const signalSessionId = useMemo(
-    () => `${call.id}:${call.accepted_at || call.updated_at || call.queued_at}`,
-    [call.accepted_at, call.id, call.queued_at, call.updated_at],
+    () => `${call.id}:${call.accepted_at || call.queued_at}`,
+    [call.accepted_at, call.id, call.queued_at],
   );
 
   const roomSubtitle = useMemo(() => {
@@ -96,7 +69,7 @@ export function WebRtcCallRoom({ call, participantRole, onCallEnded }: WebRtcCal
   }, [call.branch, call.request_number]);
 
   const postSignal = useCallback(
-    async (type: CallSignalType, payload: Record<string, unknown> = {}) => {
+    async (type: RtcSignalType, payload: Record<string, unknown> = {}) => {
       if (!user) return;
       await fetchJsonWithFirebase(user, `/api/calls/${call.id}/signals`, {
         method: 'POST',
@@ -117,101 +90,7 @@ export function WebRtcCallRoom({ call, participantRole, onCallEnded }: WebRtcCal
     [call.id, user],
   );
 
-  const uploadRecording = useCallback(
-    async (blob: Blob) => {
-      if (!user || participantRole !== 'staff' || !blob.size) return;
-
-      setRecordingStatus('saving');
-      try {
-        const token = await user.getIdToken();
-        const formData = new FormData();
-        const extension = blob.type.includes('ogg') ? 'ogg' : 'webm';
-        formData.append('recording', blob, `call-${call.id}.${extension}`);
-
-        const response = await fetch(`/api/calls/${call.id}/recording`, {
-          method: 'POST',
-          headers: { Authorization: `Bearer ${token}` },
-          body: formData,
-        });
-        const data = await response.json().catch(() => ({}));
-        if (!response.ok) throw new Error(data.message || 'Recording upload failed.');
-        setRecordingStatus('saved');
-      } catch (error) {
-        setRecordingStatus('failed');
-        setRoomError(error instanceof Error ? error.message : 'Unable to save call recording.');
-      }
-    },
-    [call.id, participantRole, user],
-  );
-
-  const stopRecording = useCallback(() => {
-    const recorder = recorderRef.current;
-    if (recorder && recorder.state !== 'inactive') {
-      setRecordingStatus('saving');
-      recorder.stop();
-    }
-
-    recordingNodesRef.current.forEach((node) => {
-      try {
-        node.disconnect();
-      } catch {
-        // no-op
-      }
-    });
-    recordingNodesRef.current = [];
-    void recordingContextRef.current?.close().catch(() => undefined);
-    recordingContextRef.current = null;
-  }, []);
-
-  const tryStartRecording = useCallback(() => {
-    if (participantRole !== 'staff') return;
-    if (recorderRef.current && recorderRef.current.state !== 'inactive') return;
-
-    const localStream = localStreamRef.current;
-    const remoteStream = remoteStreamRef.current;
-    if (!localStream || !remoteStream) return;
-
-    try {
-      const AudioContextCtor = window.AudioContext || (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-      if (!AudioContextCtor || typeof MediaRecorder === 'undefined') return;
-
-      const audioContext = new AudioContextCtor();
-      const destination = audioContext.createMediaStreamDestination();
-      const localSource = audioContext.createMediaStreamSource(localStream);
-      const remoteSource = audioContext.createMediaStreamSource(remoteStream);
-      localSource.connect(destination);
-      remoteSource.connect(destination);
-
-      recordingContextRef.current = audioContext;
-      recordingNodesRef.current = [localSource, remoteSource];
-      recordingChunksRef.current = [];
-
-      const preferredMime = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
-        ? 'audio/webm;codecs=opus'
-        : MediaRecorder.isTypeSupported('audio/webm')
-          ? 'audio/webm'
-          : '';
-
-      const recorder = new MediaRecorder(destination.stream, preferredMime ? { mimeType: preferredMime } : undefined);
-      recorderRef.current = recorder;
-      recorder.ondataavailable = (event) => {
-        if (event.data.size > 0) recordingChunksRef.current.push(event.data);
-      };
-      recorder.onstop = () => {
-        const blob = new Blob(recordingChunksRef.current, { type: recorder.mimeType || preferredMime || 'audio/webm' });
-        recordingChunksRef.current = [];
-        void uploadRecording(blob);
-      };
-      recorder.start(1000);
-      setRecordingStatus('recording');
-    } catch (error) {
-      setRecordingStatus('failed');
-      setRoomError(error instanceof Error ? error.message : 'Unable to start call recording.');
-    }
-  }, [participantRole, uploadRecording]);
-
   const cleanup = useCallback(() => {
-    stopRecording();
     pcRef.current?.getSenders().forEach((sender) => {
       try {
         sender.track?.stop();
@@ -223,9 +102,8 @@ export function WebRtcCallRoom({ call, participantRole, onCallEnded }: WebRtcCal
     pcRef.current = null;
     localStreamRef.current?.getTracks().forEach((track) => track.stop());
     localStreamRef.current = null;
-    remoteStreamRef.current = null;
     pendingCandidatesRef.current = [];
-  }, [stopRecording]);
+  }, []);
 
   const endCall = useCallback(
     async (reason = 'Call ended by participant.') => {
@@ -293,10 +171,8 @@ export function WebRtcCallRoom({ call, participantRole, onCallEnded }: WebRtcCal
       peer.ontrack = (event) => {
         const [stream] = event.streams;
         if (remoteAudioRef.current && stream) {
-          remoteStreamRef.current = stream;
           remoteAudioRef.current.srcObject = stream;
           void remoteAudioRef.current.play().catch(() => undefined);
-          tryStartRecording();
         }
       };
 
@@ -307,7 +183,6 @@ export function WebRtcCallRoom({ call, participantRole, onCallEnded }: WebRtcCal
         setConnectionState(peer.connectionState);
         if (peer.connectionState === 'connected') {
           setStatus('Connected — live audio is running.');
-          tryStartRecording();
           if (!startSentRef.current) {
             startSentRef.current = true;
             void patchCall('start');
@@ -337,11 +212,10 @@ export function WebRtcCallRoom({ call, participantRole, onCallEnded }: WebRtcCal
         }
       });
       setStatus(participantRole === 'staff' ? 'Waiting for customer audio...' : 'Waiting for staff to answer...');
-      tryStartRecording();
 
       if (participantRole === 'staff' && !readySentRef.current) {
         readySentRef.current = true;
-        await postSignal('ready', { room: call.room_name || call.id });
+        await postSignal('ready', {});
       }
 
       return peer;
@@ -390,12 +264,11 @@ export function WebRtcCallRoom({ call, participantRole, onCallEnded }: WebRtcCal
       }
     }
 
-    async function handleSignal(signal: CallSignal) {
+    async function handleSignal(signal: RtcSignal) {
       if (processedSignalsRef.current.has(signal.id)) return;
       processedSignalsRef.current.add(signal.id);
-      const signalCreatedAt = normalizeTimestamp(signal.created_at);
-      if (signalCreatedAt && signalCreatedAt > lastSignalAtRef.current) {
-        lastSignalAtRef.current = signalCreatedAt;
+      if (signal.created_at > lastSignalAtRef.current) {
+        lastSignalAtRef.current = signal.created_at;
       }
       if (signal.payload.sessionId !== signalSessionId) return;
       if (signal.sender_role === participantRole) return;
@@ -442,7 +315,6 @@ export function WebRtcCallRoom({ call, participantRole, onCallEnded }: WebRtcCal
       }
 
       if (signal.signal_type === 'hangup') {
-        stopRecording();
         cleanup();
         setConnectionState('closed');
         setStatus('The other participant ended the call.');
@@ -470,7 +342,7 @@ export function WebRtcCallRoom({ call, participantRole, onCallEnded }: WebRtcCal
         await ensurePeer();
         await patchCall('heartbeat');
         await pollSignals();
-        signalTimer = window.setInterval(() => void pollSignals(), 1200);
+        signalTimer = window.setInterval(() => void pollSignals(), 1500);
         heartbeatTimer = window.setInterval(() => void patchCall('heartbeat'), 20000);
       } catch (error) {
         if (cancelled || (error instanceof Error && error.message === 'cancelled')) return;
@@ -487,22 +359,7 @@ export function WebRtcCallRoom({ call, participantRole, onCallEnded }: WebRtcCal
       if (heartbeatTimer) window.clearInterval(heartbeatTimer);
       cleanup();
     };
-  }, [
-    call.accepted_at,
-    call.id,
-    call.queued_at,
-    call.room_name,
-    canJoin,
-    cleanup,
-    onCallEnded,
-    participantRole,
-    patchCall,
-    postSignal,
-    signalSessionId,
-    stopRecording,
-    tryStartRecording,
-    user,
-  ]);
+  }, [call.accepted_at, call.id, call.queued_at, canJoin, cleanup, onCallEnded, participantRole, patchCall, postSignal, signalSessionId, user]);
 
   useEffect(() => {
     if (connectionState !== 'connected') return;
@@ -551,8 +408,7 @@ export function WebRtcCallRoom({ call, participantRole, onCallEnded }: WebRtcCal
         <div className="webrtc-status-copy">
           <strong>{status}</strong>
           <small>
-            {roleLabel} side • {turnConfigured === false ? 'STUN fallback only' : 'Metered TURN ready'} • {formatDuration(elapsed)}
-            {participantRole === 'staff' ? ` • ${recordingLabel(recordingStatus)}` : ''}
+            {roleLabel} side • {turnConfigured === false ? 'STUN fallback only' : 'TURN ready'} • {formatDuration(elapsed)}
           </small>
         </div>
       </div>

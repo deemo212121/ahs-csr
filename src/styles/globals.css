@@ -384,12 +384,6 @@
   padding: 7px 9px;
 }
 
-.call-history-row .recording-ready {
-  background: rgba(20, 184, 166, 0.18);
-  border-color: rgba(45, 212, 191, 0.34);
-  color: #a7fff4;
-}
-
 .call-request-card {
   background: rgba(5, 22, 50, 0.78);
   border: 1px solid rgba(86, 164, 255, 0.22);
@@ -908,7 +902,6 @@
   white-space: nowrap;
 }
 
-.call-recording-card,
 .call-details-notes {
   background: rgba(4, 18, 42, 0.76);
   border: 1px solid rgba(90, 170, 255, 0.2);
@@ -917,27 +910,10 @@
   padding: 14px;
 }
 
-.call-recording-card > div {
-  align-items: center;
-  color: #e8f8ff;
-  display: flex;
-  gap: 12px;
-  margin-bottom: 12px;
-}
-
-.call-recording-card svg {
-  color: #20e7ff;
-}
-
-.call-recording-card p,
 .call-details-notes p,
 .call-details-notes small {
   color: #aabbd7;
   margin: 4px 0 0;
-}
-
-.call-recording-card audio {
-  width: 100%;
 }
 
 .call-details-notes h3 {

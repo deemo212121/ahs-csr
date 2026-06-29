@@ -16,28 +16,9 @@ function senderKey(context: AuthContext) {
   return context.role === 'customer' ? `local:${context.profile.id}` : staffProfileKey(context);
 }
 
-function normalizeTimestamp(value: string | null | undefined) {
-  if (!value) return null;
-  const trimmed = value.trim();
-  const fixedTimezone = trimmed.replace(
-    /(\d|\.\d+)\s+([+-]?\d{2}:?\d{2})$/,
-    (_match, prefix: string, timezone: string) => `${prefix}${timezone.startsWith('-') || timezone.startsWith('+') ? timezone : `+${timezone}`}`,
-  );
-  const parsed = new Date(fixedTimezone);
-  if (!Number.isFinite(parsed.getTime())) return null;
-  return parsed.toISOString();
-}
-
-function normalizeSignalRows<T extends { created_at: string | null }>(rows: T[]) {
-  return rows.map((row) => ({
-    ...row,
-    created_at: normalizeTimestamp(row.created_at) ?? row.created_at,
-  }));
-}
-
 async function assertCanAccessCall(callId: string, auth: AuthContext) {
   const { data, error } = await getSupabaseAdmin()
-    .from('call_requests')
+    .from('rtc_calls')
     .select('id, customer_id, status, accepted_by_profile_id')
     .eq('id', callId)
     .single();
@@ -58,10 +39,10 @@ function missingCallSchemaMessage(error: unknown) {
   if (
     message.includes('Could not find') ||
     message.includes('column') ||
-    message.includes('call_signals') ||
+    message.includes('rtc_signals') ||
     message.includes('relation')
   ) {
-    return 'WebRTC signal table is not installed yet. Run supabase/webrtc_call_queue_setup.sql in your main Supabase database.';
+    return 'WebRTC signal table is not installed yet. Run supabase/rtc_calls_setup.sql in your main Supabase database.';
   }
   return null;
 }
@@ -78,11 +59,11 @@ export async function GET(
     await assertCanAccessCall(id, auth);
 
     const url = new URL(request.url);
-    const after = normalizeTimestamp(url.searchParams.get('after'));
+    const after = url.searchParams.get('after');
     let query = getSupabaseAdmin()
-      .from('call_signals')
-      .select('id, call_request_id, sender_profile_id, sender_role, signal_type, payload, created_at')
-      .eq('call_request_id', id)
+      .from('rtc_signals')
+      .select('id, call_id, sender_profile_id, sender_role, signal_type, payload, created_at')
+      .eq('call_id', id)
       .order('created_at', { ascending: true })
       .limit(200);
 
@@ -91,7 +72,7 @@ export async function GET(
     const { data, error } = await query;
     if (error) throw new Error(error.message);
 
-    return NextResponse.json({ signals: normalizeSignalRows(data ?? []) });
+    return NextResponse.json({ signals: data ?? [] });
   } catch (error) {
     const setupMessage = missingCallSchemaMessage(error);
     return NextResponse.json(
@@ -114,20 +95,20 @@ export async function POST(
 
     const body = signalSchema.parse(await request.json());
     const { data, error } = await getSupabaseAdmin()
-      .from('call_signals')
+      .from('rtc_signals')
       .insert({
-        call_request_id: id,
+        call_id: id,
         sender_profile_id: senderKey(auth),
         sender_role: auth.role === 'customer' ? 'customer' : 'staff',
         signal_type: body.type,
         payload: body.payload,
       })
-      .select('id, call_request_id, sender_profile_id, sender_role, signal_type, payload, created_at')
+      .select('id, call_id, sender_profile_id, sender_role, signal_type, payload, created_at')
       .single();
 
     if (error) throw new Error(error.message);
 
-    return NextResponse.json({ signal: normalizeSignalRows([data])[0] }, { status: 201 });
+    return NextResponse.json({ signal: data }, { status: 201 });
   } catch (error) {
     const setupMessage = missingCallSchemaMessage(error);
     return NextResponse.json(
