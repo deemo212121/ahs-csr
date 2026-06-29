@@ -8,6 +8,7 @@ import {
   ChevronDown,
   Clock3,
   ClipboardPlus,
+  FileAudio,
   Headphones,
   Info,
   MapPin,
@@ -246,6 +247,14 @@ function QuickManualTicketPanel({
   );
 }
 
+type RecordingResponse = {
+  recording: null | {
+    signed_url: string;
+    mime: string | null;
+    uploaded_at: string | null;
+  };
+};
+
 function formatDateTime(value?: string | null) {
   if (!value) return '—';
   return new Date(value).toLocaleString([], {
@@ -271,6 +280,35 @@ function CallDetailsModal({
   call: RtcCall;
   onClose: () => void;
 }) {
+  const { user } = useAuth();
+  const [recordingUrl, setRecordingUrl] = useState<string | null>(null);
+  const [recordingMessage, setRecordingMessage] = useState('Loading recording...');
+
+  useEffect(() => {
+    let cancelled = false;
+    async function loadRecording() {
+      if (!user) return;
+      setRecordingMessage('Loading recording...');
+      setRecordingUrl(null);
+      try {
+        const data = await fetchJsonWithFirebase<RecordingResponse>(user, `/api/calls/${call.id}/recording`);
+        if (cancelled) return;
+        if (data.recording?.signed_url) {
+          setRecordingUrl(data.recording.signed_url);
+          setRecordingMessage(data.recording.uploaded_at ? `Uploaded ${formatDateTime(data.recording.uploaded_at)}` : 'Recording ready');
+        } else {
+          setRecordingMessage('No recording uploaded yet.');
+        }
+      } catch (error) {
+        if (!cancelled) setRecordingMessage(error instanceof Error ? error.message : 'Unable to load recording.');
+      }
+    }
+    void loadRecording();
+    return () => {
+      cancelled = true;
+    };
+  }, [call.id, user]);
+
   return (
     <div className="call-manual-backdrop" role="presentation" onClick={onClose}>
       <section className="call-details-modal" role="dialog" aria-modal="true" onClick={(event) => event.stopPropagation()}>
@@ -293,6 +331,17 @@ function CallDetailsModal({
           <div><span>Phone</span><strong>{call.phone_number || '—'}</strong></div>
           <div><span>Email</span><strong>{call.customer_email || '—'}</strong></div>
         </div>
+
+        <section className="call-recording-card">
+          <div>
+            <FileAudio size={22} />
+            <div>
+              <strong>Recorded Audio</strong>
+              <p>{recordingMessage}</p>
+            </div>
+          </div>
+          {recordingUrl ? <audio controls src={recordingUrl} /> : null}
+        </section>
 
         <section className="call-details-notes">
           <h3><CalendarDays size={16} /> Notes</h3>
@@ -407,8 +456,9 @@ export function CallsPage() {
 
   const historyMetrics = useMemo(() => {
     const total = historyCalls.length;
+    const withRecordings = historyCalls.filter((call) => call.recording_path || call.recording_uploaded_at).length;
     const completed = historyCalls.filter((call) => call.status === 'completed').length;
-    return { total, completed };
+    return { total, withRecordings, completed };
   }, [historyCalls]);
 
   const filteredCalls = useMemo(() => {
@@ -607,11 +657,12 @@ export function CallsPage() {
           <div>
             <span className="call-eyebrow"><Clock3 size={14} /> CSR call history</span>
             <h2>All calls made through this call desk</h2>
-            <p>Click any call to view customer details, queue status, and duration.</p>
+            <p>Click any call to view customer details, queue status, duration, and recorded audio.</p>
           </div>
           <div className="call-history-stats">
             <span>{historyMetrics.total} total</span>
             <span>{historyMetrics.completed} completed</span>
+            <span>{historyMetrics.withRecordings} recordings</span>
           </div>
         </div>
 
@@ -633,6 +684,10 @@ export function CallsPage() {
               </div>
               <span>{call.accepted_by_name || 'No staff yet'}</span>
               <span>{formatCallDuration(call.call_duration_seconds)}</span>
+              <span className={call.recording_path ? 'recording-ready' : ''}>
+                <FileAudio size={14} />
+                {call.recording_path ? 'Recording' : 'No recording'}
+              </span>
             </button>
           ))}
         </div>

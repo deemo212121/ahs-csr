@@ -20,6 +20,14 @@ function formatDuration(seconds: number) {
   return `${mins}:${secs}`;
 }
 
+function recordingLabel(status: 'off' | 'recording' | 'saving' | 'saved' | 'failed') {
+  if (status === 'recording') return 'Recording';
+  if (status === 'saving') return 'Saving recording';
+  if (status === 'saved') return 'Recording saved';
+  if (status === 'failed') return 'Recording failed';
+  return 'Recording starts once connected';
+}
+
 function isDescription(value: unknown): value is RTCSessionDescriptionInit {
   return Boolean(value && typeof value === 'object' && 'type' in value && 'sdp' in value);
 }
@@ -43,6 +51,7 @@ export function WebRtcCallRoom({ call, participantRole, onCallEnded }: WebRtcCal
   }, [onCallEnded]);
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const localStreamRef = useRef<MediaStream | null>(null);
+  const remoteStreamRef = useRef<MediaStream | null>(null);
   const remoteAudioRef = useRef<HTMLAudioElement | null>(null);
   const processedSignalsRef = useRef<Set<string>>(new Set());
   const pendingCandidatesRef = useRef<RTCIceCandidateInit[]>([]);
@@ -52,11 +61,16 @@ export function WebRtcCallRoom({ call, participantRole, onCallEnded }: WebRtcCal
   const startSentRef = useRef(false);
   const restartInFlightRef = useRef(false);
   const lastRestartAtRef = useRef(0);
+  const recorderRef = useRef<MediaRecorder | null>(null);
+  const recordingChunksRef = useRef<Blob[]>([]);
+  const recordingContextRef = useRef<AudioContext | null>(null);
+  const recordingNodesRef = useRef<MediaStreamAudioSourceNode[]>([]);
   const [status, setStatus] = useState('Preparing secure audio room...');
   const [connectionState, setConnectionState] = useState<RTCPeerConnectionState>('new');
   const [muted, setMuted] = useState(false);
   const [roomError, setRoomError] = useState<string | null>(null);
   const [turnConfigured, setTurnConfigured] = useState<boolean | null>(null);
+  const [recordingStatus, setRecordingStatus] = useState<'off' | 'recording' | 'saving' | 'saved' | 'failed'>('off');
   const [elapsed, setElapsed] = useState(0);
 
   const canJoin = call.status === 'accepted' || call.status === 'assigned';
@@ -94,7 +108,100 @@ export function WebRtcCallRoom({ call, participantRole, onCallEnded }: WebRtcCal
     [call.id, user],
   );
 
+  const uploadRecording = useCallback(
+    async (blob: Blob) => {
+      if (!user || participantRole !== 'staff' || !blob.size) return;
+
+      setRecordingStatus('saving');
+      try {
+        const token = await user.getIdToken();
+        const formData = new FormData();
+        const extension = blob.type.includes('ogg') ? 'ogg' : 'webm';
+        formData.append('recording', blob, `call-${call.id}.${extension}`);
+
+        const response = await fetch(`/api/calls/${call.id}/recording`, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${token}` },
+          body: formData,
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(data.message || 'Recording upload failed.');
+        setRecordingStatus('saved');
+      } catch (error) {
+        setRecordingStatus('failed');
+        setRoomError(error instanceof Error ? error.message : 'Unable to save call recording.');
+      }
+    },
+    [call.id, participantRole, user],
+  );
+
+  const stopRecording = useCallback(() => {
+    const recorder = recorderRef.current;
+    if (recorder && recorder.state !== 'inactive') {
+      setRecordingStatus('saving');
+      recorder.stop();
+    }
+
+    recordingNodesRef.current.forEach((node) => {
+      try {
+        node.disconnect();
+      } catch {
+        // no-op
+      }
+    });
+    recordingNodesRef.current = [];
+    void recordingContextRef.current?.close().catch(() => undefined);
+    recordingContextRef.current = null;
+  }, []);
+
+  const tryStartRecording = useCallback(() => {
+    if (participantRole !== 'staff') return;
+    if (pcRef.current?.connectionState !== 'connected') return;
+    if (recorderRef.current && recorderRef.current.state !== 'inactive') return;
+
+    const localStream = localStreamRef.current;
+    const remoteStream = remoteStreamRef.current;
+    if (!localStream || !remoteStream) return;
+
+    try {
+      const audioContext = new AudioContext();
+      const destination = audioContext.createMediaStreamDestination();
+      const localSource = audioContext.createMediaStreamSource(localStream);
+      const remoteSource = audioContext.createMediaStreamSource(remoteStream);
+      localSource.connect(destination);
+      remoteSource.connect(destination);
+
+      recordingContextRef.current = audioContext;
+      recordingNodesRef.current = [localSource, remoteSource];
+      recordingChunksRef.current = [];
+
+      const preferredMime = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+        ? 'audio/webm;codecs=opus'
+        : MediaRecorder.isTypeSupported('audio/webm')
+          ? 'audio/webm'
+          : '';
+
+      const recorder = new MediaRecorder(destination.stream, preferredMime ? { mimeType: preferredMime } : undefined);
+      recorderRef.current = recorder;
+      recorder.ondataavailable = (event) => {
+        if (event.data.size > 0) recordingChunksRef.current.push(event.data);
+      };
+      recorder.onstop = () => {
+        const blob = new Blob(recordingChunksRef.current, { type: recorder.mimeType || preferredMime || 'audio/webm' });
+        recordingChunksRef.current = [];
+        void uploadRecording(blob);
+      };
+      recorder.start(1000);
+      console.debug(`[webrtc:${participantRole}] recording started (connectionState was connected) at ${new Date().toISOString()}`);
+      setRecordingStatus('recording');
+    } catch (error) {
+      setRecordingStatus('failed');
+      setRoomError(error instanceof Error ? error.message : 'Unable to start call recording.');
+    }
+  }, [participantRole, uploadRecording]);
+
   const cleanup = useCallback(() => {
+    stopRecording();
     if (pcRef.current) {
       console.debug(`[webrtc:${participantRole}] close() — tearing down RTCPeerConnection at ${new Date().toISOString()}`);
     }
@@ -109,8 +216,9 @@ export function WebRtcCallRoom({ call, participantRole, onCallEnded }: WebRtcCal
     pcRef.current = null;
     localStreamRef.current?.getTracks().forEach((track) => track.stop());
     localStreamRef.current = null;
+    remoteStreamRef.current = null;
     pendingCandidatesRef.current = [];
-  }, [participantRole]);
+  }, [participantRole, stopRecording]);
 
   const endCall = useCallback(
     async (reason = 'Call ended by participant.') => {
@@ -183,8 +291,10 @@ export function WebRtcCallRoom({ call, participantRole, onCallEnded }: WebRtcCal
       peer.ontrack = (event) => {
         const [stream] = event.streams;
         if (remoteAudioRef.current && stream) {
+          remoteStreamRef.current = stream;
           remoteAudioRef.current.srcObject = stream;
           void remoteAudioRef.current.play().catch(() => undefined);
+          tryStartRecording();
         }
       };
 
@@ -201,6 +311,7 @@ export function WebRtcCallRoom({ call, participantRole, onCallEnded }: WebRtcCal
         setConnectionState(peer.connectionState);
         if (peer.connectionState === 'connected') {
           setStatus('Connected — live audio is running.');
+          tryStartRecording();
           if (!startSentRef.current) {
             startSentRef.current = true;
             void patchCall('start');
@@ -386,7 +497,7 @@ export function WebRtcCallRoom({ call, participantRole, onCallEnded }: WebRtcCal
       if (heartbeatTimer) window.clearInterval(heartbeatTimer);
       cleanup();
     };
-  }, [call.accepted_at, call.id, call.queued_at, canJoin, cleanup, participantRole, patchCall, postSignal, signalSessionId, user]);
+  }, [call.accepted_at, call.id, call.queued_at, canJoin, cleanup, participantRole, patchCall, postSignal, signalSessionId, tryStartRecording, user]);
 
   useEffect(() => {
     if (connectionState !== 'connected') return;
@@ -436,6 +547,7 @@ export function WebRtcCallRoom({ call, participantRole, onCallEnded }: WebRtcCal
           <strong>{status}</strong>
           <small>
             {roleLabel} side • {turnConfigured === false ? 'STUN fallback only' : 'TURN ready'} • {formatDuration(elapsed)}
+            {participantRole === 'staff' ? ` • ${recordingLabel(recordingStatus)}` : ''}
           </small>
         </div>
       </div>

@@ -35,6 +35,9 @@ export type RtcCall = {
   last_customer_seen_at: string | null;
   ended_by_profile_id: string | null;
   ended_reason: string | null;
+  recording_path: string | null;
+  recording_mime: string | null;
+  recording_uploaded_at: string | null;
   created_at: string;
 };
 

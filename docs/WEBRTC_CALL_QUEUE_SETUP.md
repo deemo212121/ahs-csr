@@ -10,7 +10,21 @@ Do not run it in the ER / ah-solutions database.
 
 This is a from-scratch rebuild of the calling system (`rtc_calls` / `rtc_signals`), kept separate from the original `call_requests` / `call_signals` tables (`supabase/webrtc_call_queue_setup.sql`). The originals are left untouched in the database but are no longer used by the app — there's no need to run that older script for new installs.
 
-Recording is not implemented in this version. It can be reintroduced later as a separate feature without changing the connection/signaling tables.
+If you ran `rtc_calls_setup.sql` before recording was added back, re-run it once — the `recording_*` columns and the `call-recordings` bucket are added via `add column if not exists` / `on conflict`, so it's safe to apply on top of an existing table.
+
+## Recordings
+
+Call recording is staff-side browser recording. The CSR/Manager/TL browser mixes its own microphone plus the customer's incoming audio and records the mix — recording only starts once `RTCPeerConnection.connectionState` actually reaches `connected` (not on accept, not on mic access), so nothing is captured before the call is truly live. The mixed track is uploaded once the call ends.
+
+Uploads go to a private Supabase Storage bucket, organized like a folder per call: `{call_id}/{timestamp}-{staff_profile_id}.webm`.
+
+```env
+CALL_RECORDINGS_BUCKET=call-recordings
+```
+
+If this env value is missing, the app uses `call-recordings` (created by `rtc_calls_setup.sql`). The upload API will also try to create the bucket on the fly using the Supabase service-role key if it's somehow missing. The recording path and MIME type are saved on `public.rtc_calls.recording_path` / `recording_mime`.
+
+Recordings are private — retrieval is only via `GET /api/calls/{id}/recording`, which mints a 15-minute signed URL. There is no public URL.
 
 ## TURN env
 

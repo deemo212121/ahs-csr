@@ -40,12 +40,34 @@ create table if not exists public.rtc_calls (
   customer_joined_at timestamptz,
   last_staff_seen_at timestamptz,
   last_customer_seen_at timestamptz,
+  recording_path text,
+  recording_mime text,
+  recording_uploaded_at timestamptz,
   created_at timestamptz not null default now()
 );
+
+-- Safe to re-run: adds the recording columns to a table created before they existed.
+alter table public.rtc_calls add column if not exists recording_path text;
+alter table public.rtc_calls add column if not exists recording_mime text;
+alter table public.rtc_calls add column if not exists recording_uploaded_at timestamptz;
 
 create index if not exists rtc_calls_status_idx on public.rtc_calls(status, queued_at desc);
 create index if not exists rtc_calls_branch_idx on public.rtc_calls(branch, status, queued_at desc);
 create index if not exists rtc_calls_customer_idx on public.rtc_calls(customer_id, queued_at desc);
+
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values (
+  'call-recordings',
+  'call-recordings',
+  false,
+  83886080,
+  array['audio/webm', 'audio/ogg', 'audio/mp4', 'audio/mpeg', 'video/webm']
+)
+on conflict (id) do update
+set
+  public = false,
+  file_size_limit = excluded.file_size_limit,
+  allowed_mime_types = excluded.allowed_mime_types;
 
 create table if not exists public.rtc_signals (
   id uuid primary key default gen_random_uuid(),

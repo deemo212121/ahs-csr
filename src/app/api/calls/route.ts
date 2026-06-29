@@ -35,6 +35,9 @@ const callSelect = `
   last_customer_seen_at,
   ended_by_profile_id,
   ended_reason,
+  recording_path,
+  recording_mime,
+  recording_uploaded_at,
   created_at,
   request:service_requests(id, request_number)
 `;
@@ -131,6 +134,9 @@ function mapCallRow(row: RawCallRow): RtcCall {
     last_customer_seen_at: row.last_customer_seen_at ?? null,
     ended_by_profile_id: nullableText(row.ended_by_profile_id),
     ended_reason: nullableText(row.ended_reason),
+    recording_path: nullableText(row.recording_path),
+    recording_mime: nullableText(row.recording_mime),
+    recording_uploaded_at: row.recording_uploaded_at ?? null,
     created_at: row.created_at,
   };
 }
