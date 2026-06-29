@@ -84,63 +84,25 @@ function normalizeRole(value: unknown): AppRole | null {
 function normalizeErStaffRole(value: unknown): Exclude<AppRole, 'customer'> | null {
   if (typeof value !== 'string') return null;
 
-  const role = value
-    .trim()
-    .toLowerCase()
-    .replace(/[_-]+/g, ' ')
-    .replace(/\s+/g, ' ');
+  const raw = value.trim();
+  const upper = raw.toUpperCase();
+  const spaced = raw.toLowerCase().replace(/\s+/g, ' ').trim();
 
-  if (
-    [
-      'admin',
-      'superadmin',
-      'super admin',
-      'system admin',
-      'administrator',
-    ].includes(role)
-  ) {
+  if (upper === 'ADMIN' || upper === 'SUPERADMIN' || spaced === 'admin') {
     return 'admin';
   }
 
-  if (
-    [
-      'manager',
-      'csr manager',
-      'csr account manager',
-      'branch manager',
-      'senior branch manager',
-      'operations manager',
-    ].includes(role)
-  ) {
+  // The ER database uses the display role "CSR Manager".
+  // Keep this strict so CSR_MANAGER / MANAGER / Parts Manager are not accepted as CSR Manager accounts.
+  if (spaced === 'csr manager' && !raw.includes('_')) {
     return 'csr_manager';
   }
 
-  if (
-    [
-      'team leader',
-      'csr team leader',
-      'team lead',
-      'csr team lead',
-      'tl',
-      'csr tl',
-      'teamleader',
-      'csrteamleader',
-    ].includes(role)
-  ) {
+  if (upper === 'CSR_TEAM_LEADER') {
     return 'team_leader';
   }
 
-  if (
-    [
-      'csr',
-      'csr agent',
-      'agent',
-      'customer service representative',
-      'customer service rep',
-      'customer support representative',
-      'customer support agent',
-    ].includes(role)
-  ) {
+  if (upper === 'CSR_AGENT') {
     return 'csr';
   }
 

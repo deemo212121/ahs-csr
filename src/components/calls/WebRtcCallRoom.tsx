@@ -36,9 +36,22 @@ function isIceCandidate(value: unknown): value is RTCIceCandidateInit {
   return Boolean(value && typeof value === 'object' && 'candidate' in value);
 }
 
+function normalizeTimestamp(value: string | null | undefined) {
+  if (!value) return null;
+  const trimmed = value.trim();
+  const fixedTimezone = trimmed.replace(
+    /(\d|\.\d+)\s+([+-]?\d{2}:?\d{2})$/,
+    (_match, prefix: string, timezone: string) => `${prefix}${timezone.startsWith('-') || timezone.startsWith('+') ? timezone : `+${timezone}`}`,
+  );
+  const parsed = new Date(fixedTimezone);
+  if (!Number.isFinite(parsed.getTime())) return null;
+  return parsed.toISOString();
+}
+
 function signalBaseline(call: CallQueueItem) {
   const source = call.accepted_at || call.updated_at || new Date().toISOString();
-  const time = new Date(source).getTime();
+  const normalizedSource = normalizeTimestamp(source) ?? source;
+  const time = new Date(normalizedSource).getTime();
   if (!Number.isFinite(time)) return new Date(Date.now() - 10000).toISOString();
   return new Date(time - 30000).toISOString();
 }
@@ -337,8 +350,9 @@ export function WebRtcCallRoom({ call, participantRole, onCallEnded }: WebRtcCal
     async function handleSignal(signal: CallSignal) {
       if (processedSignalsRef.current.has(signal.id)) return;
       processedSignalsRef.current.add(signal.id);
-      if (signal.created_at && signal.created_at > lastSignalAtRef.current) {
-        lastSignalAtRef.current = signal.created_at;
+      const signalCreatedAt = normalizeTimestamp(signal.created_at);
+      if (signalCreatedAt && signalCreatedAt > lastSignalAtRef.current) {
+        lastSignalAtRef.current = signalCreatedAt;
       }
       if (signal.payload.sessionId !== signalSessionId) return;
       if (signal.sender_role === participantRole) return;

@@ -232,14 +232,22 @@ function staffToMember(profile: StaffProfileForTeams): TeamMember {
 function staffTeamBlueprints(staffProfiles: StaffProfileForTeams[]) {
   const usableStaff = staffProfiles.filter((profile) => cleanDisplay(profile.display_name) || cleanDisplay(profile.email));
   const staffByName = new Map(usableStaff.map((profile) => [normalizeKey(profile.display_name), profile] as const));
-  const teamNames = new Set<string>();
+  const leaderFamilies = new Set(['team_leader']);
+  const teamMemberFamilies = new Set(['team_leader', 'agent']);
+  const teamNames = new Set(
+    usableStaff
+      .filter((profile) => leaderFamilies.has(profile.role_family))
+      .map((profile) => cleanDisplay(profile.display_name) || cleanDisplay(profile.email))
+      .filter(Boolean),
+  );
 
   usableStaff.forEach((profile) => {
     const managerName = cleanDisplay(profile.manager_name);
-    if (managerName) teamNames.add(managerName);
-
-    if (['team_leader', 'manager', 'branch_manager'].includes(profile.role_family)) {
-      teamNames.add(cleanDisplay(profile.display_name) || cleanDisplay(profile.email));
+    if (managerName && staffByName.has(normalizeKey(managerName))) {
+      const manager = staffByName.get(normalizeKey(managerName));
+      if (manager && leaderFamilies.has(manager.role_family)) {
+        teamNames.add(managerName);
+      }
     }
   });
 
@@ -247,12 +255,15 @@ function staffTeamBlueprints(staffProfiles: StaffProfileForTeams[]) {
     .map((leaderName) => {
       const leader = staffByName.get(normalizeKey(leaderName));
       const members = usableStaff.filter((profile) => (
-        normalizeKey(profile.manager_name) === normalizeKey(leaderName)
-        || normalizeKey(profile.display_name) === normalizeKey(leaderName)
+        teamMemberFamilies.has(profile.role_family)
+        && (
+          normalizeKey(profile.manager_name) === normalizeKey(leaderName)
+          || normalizeKey(profile.display_name) === normalizeKey(leaderName)
+        )
       ));
 
       const agents = members
-        .filter((profile) => profile.role_family !== 'admin')
+        .filter((profile) => teamMemberFamilies.has(profile.role_family))
         .sort((a, b) => {
           const aLeader = normalizeKey(a.display_name) === normalizeKey(leaderName) ? 0 : 1;
           const bLeader = normalizeKey(b.display_name) === normalizeKey(leaderName) ? 0 : 1;

@@ -58,7 +58,7 @@ type StaffResponse = {
   message?: string;
 };
 
-type RoleFilter = 'all' | 'admin' | 'manager' | 'team_leader' | 'agent' | 'branch_manager' | 'technician' | 'finance' | 'hr' | 'other';
+type RoleFilter = 'all' | 'admin' | 'manager' | 'team_leader' | 'agent';
 type StatusFilter = 'all' | 'active' | 'inactive';
 
 type StaffOption = {
@@ -68,15 +68,10 @@ type StaffOption = {
 
 const roleFilterOptions: Array<{ value: RoleFilter; label: string }> = [
   { value: 'all', label: 'All Roles' },
-  { value: 'admin', label: 'Admins' },
-  { value: 'manager', label: 'Managers' },
-  { value: 'team_leader', label: 'Team Leaders' },
+  { value: 'admin', label: 'Admin / Super Admin' },
+  { value: 'manager', label: 'CSR Managers' },
+  { value: 'team_leader', label: 'CSR Team Leaders' },
   { value: 'agent', label: 'CSR Agents' },
-  { value: 'branch_manager', label: 'Branch Managers' },
-  { value: 'technician', label: 'Technicians' },
-  { value: 'finance', label: 'Finance' },
-  { value: 'hr', label: 'HR' },
-  { value: 'other', label: 'Other' },
 ];
 
 function normalize(value: string | null | undefined) {
@@ -115,10 +110,6 @@ function roleTone(roleFamily: string) {
     manager: 'purple',
     team_leader: 'blue',
     agent: 'green',
-    branch_manager: 'yellow',
-    technician: 'neutral',
-    finance: 'yellow',
-    hr: 'purple',
   };
   return tones[roleFamily] ?? 'neutral';
 }
@@ -128,12 +119,7 @@ function getLeadershipRank(roleFamily: string) {
     admin: 1,
     manager: 2,
     team_leader: 3,
-    branch_manager: 4,
-    agent: 5,
-    technician: 6,
-    finance: 7,
-    hr: 8,
-    other: 9,
+    agent: 4,
   };
   return ranks[roleFamily] ?? 99;
 }
@@ -286,6 +272,7 @@ export function AdminStaffPage() {
       total: staff.length,
       active,
       admins: countByFamily('admin'),
+      managers: countByFamily('manager'),
       leaders: countByFamily('team_leader'),
       agents: countByFamily('agent'),
       branches: branchSet.size,
@@ -295,7 +282,7 @@ export function AdminStaffPage() {
 
   const leadership = useMemo(() => {
     return staff
-      .filter((profile) => ['admin', 'manager', 'team_leader', 'branch_manager'].includes(profile.role_family))
+      .filter((profile) => ['admin', 'manager', 'team_leader'].includes(profile.role_family))
       .sort((a, b) => {
         const rank = getLeadershipRank(a.role_family) - getLeadershipRank(b.role_family);
         if (rank !== 0) return rank;
@@ -346,8 +333,8 @@ export function AdminStaffPage() {
       <AdminStatGrid
         stats={[
           { label: 'Total Staff', value: totals.total, tone: 'cyan', helper: 'ER profiles shown' },
-          { label: 'Active Accounts', value: totals.active, tone: 'green', helper: 'is_active = true' },
           { label: 'Admins', value: totals.admins, tone: 'blue', helper: 'Admin/Super Admin' },
+          { label: 'CSR Managers', value: totals.managers, tone: 'green', helper: 'CSR Manager' },
           { label: 'Team Leaders', value: totals.leaders, tone: 'purple', helper: 'CSR leadership' },
           { label: 'CSR Agents', value: totals.agents, tone: 'yellow', helper: 'Assigned agents' },
           { label: 'Branches Covered', value: totals.branches, tone: 'neutral', helper: 'Branch access count' },

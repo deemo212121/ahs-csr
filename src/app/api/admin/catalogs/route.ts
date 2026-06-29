@@ -458,15 +458,46 @@ function cleanRole(role: string | null | undefined) {
   return textValue(role) || 'Unassigned';
 }
 
+function allowedStaffRole(role: string | null | undefined) {
+  const raw = textValue(role) ?? '';
+  const upper = raw.toUpperCase();
+  const spaced = raw.toLowerCase().replace(/\s+/g, ' ').trim();
+
+  if (upper === 'SUPERADMIN') {
+    return { role: 'SUPERADMIN', label: 'Super Admin', family: 'admin' };
+  }
+
+  if (upper === 'ADMIN' || spaced === 'admin') {
+    return { role: 'Admin', label: 'Admin', family: 'admin' };
+  }
+
+  if (upper === 'CSR_AGENT') {
+    return { role: 'CSR_AGENT', label: 'CSR Agent', family: 'agent' };
+  }
+
+  if (upper === 'CSR_TEAM_LEADER') {
+    return { role: 'CSR_TEAM_LEADER', label: 'CSR Team Leader', family: 'team_leader' };
+  }
+
+  // Important: the ER role must be the literal display role "CSR Manager".
+  // Do not treat CSR_MANAGER, MANAGER, Parts Manager, Branch Manager, Claims, etc. as CSR Managers.
+  if (spaced === 'csr manager' && !raw.includes('_')) {
+    return { role: 'CSR Manager', label: 'CSR Manager', family: 'manager' };
+  }
+
+  return null;
+}
+
 function roleLabel(role: string | null | undefined) {
+  const allowed = allowedStaffRole(role);
+  if (allowed) return allowed.label;
+
   const normalized = cleanRole(role);
   const map: Record<string, string> = {
     SUPERADMIN: 'Super Admin',
     ADMIN: 'Admin',
     CSR_AGENT: 'CSR Agent',
     CSR_TEAM_LEADER: 'CSR Team Leader',
-    CSR_MANAGER: 'CSR Manager',
-    MANAGER: 'Manager',
     TECHNICIAN: 'Technician',
     FINANCE: 'Finance',
     HR: 'HR',
@@ -480,15 +511,8 @@ function roleLabel(role: string | null | undefined) {
 }
 
 function roleFamily(role: string | null | undefined) {
-  const value = cleanRole(role).toLowerCase().replace(/[-_\s]+/g, ' ').trim();
-  if (value.includes('superadmin') || value.includes('super admin') || value === 'admin') return 'admin';
-  if (value.includes('team leader') || value === 'tl') return 'team_leader';
-  if (value.includes('branch manager')) return 'branch_manager';
-  if (value.includes('csr manager') || value.includes('parts manager') || value === 'manager') return 'manager';
-  if (value.includes('csr agent') || value.includes('agent') || value === 'csr') return 'agent';
-  if (value.includes('technician')) return 'technician';
-  if (value.includes('finance')) return 'finance';
-  if (value === 'hr' || value.includes('human')) return 'hr';
+  const allowed = allowedStaffRole(role);
+  if (allowed) return allowed.family;
   return 'other';
 }
 
@@ -564,8 +588,10 @@ async function getErStaffProfiles() {
   const knownBranches = Array.from(new Set(staffRows.flatMap((staff) => compactWorkPlan(staff.work_plan).branches)));
 
   return staffRows
-    .filter((staff) => cleanRole(staff.role).toLowerCase() !== 'customer')
     .map((staff) => {
+      const allowedRole = allowedStaffRole(staff.role);
+      if (!allowedRole) return null;
+
       const name = textValue(staff.display_name) || textValue(staff.username) || textValue(staff.email) || 'Unnamed staff';
       const assignedBranch = isUsableBranch(staff.assigned_branch) ? textValue(staff.assigned_branch) : null;
       const branches = Array.from(new Set([
@@ -573,7 +599,6 @@ async function getErStaffProfiles() {
         ...splitBranches(staff.branch_access, knownBranches),
       ]));
       const plan = compactWorkPlan(staff.work_plan);
-      const role = cleanRole(staff.role);
 
       return {
         id: staff.id,
@@ -581,9 +606,9 @@ async function getErStaffProfiles() {
         email: textValue(staff.email),
         username: textValue(staff.username),
         display_name: name,
-        role,
-        role_label: roleLabel(role),
-        role_family: roleFamily(role),
+        role: allowedRole.role,
+        role_label: allowedRole.label,
+        role_family: allowedRole.family,
         phone_number: textValue(staff.phone_number),
         employee_id: textValue(staff.employee_id),
         department: textValue(staff.department),
@@ -607,7 +632,8 @@ async function getErStaffProfiles() {
         work_plan_branches: plan.branches.slice(0, 80),
         source: 'ER profiles',
       };
-    });
+    })
+    .filter((staff): staff is NonNullable<typeof staff> => Boolean(staff));
 }
 
 async function getStaffProfiles() {

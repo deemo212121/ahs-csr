@@ -271,8 +271,8 @@ export function ManagerDashboard() {
 
   const teams = useMemo(() => buildTeamCards(requests, staff), [requests, staff]);
   const sortedTeams = useMemo(() => [...teams].sort((a, b) => teamSortScore(b) - teamSortScore(a) || a.leader.localeCompare(b.leader)), [teams]);
-  const previewTeams = useMemo(() => sortedTeams.slice(0, 6), [sortedTeams]);
-  const dashboardTeams = useMemo(() => sortedTeams.slice(0, 4), [sortedTeams]);
+  const previewTeams = useMemo(() => sortedTeams.slice(0, 5), [sortedTeams]);
+  const dashboardTeams = useMemo(() => sortedTeams.slice(0, 5), [sortedTeams]);
   const summary = useMemo(() => getRequestBreakdown(requests), [requests]);
   const maxTickets = Math.max(
     1,

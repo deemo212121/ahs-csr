@@ -76,10 +76,6 @@ function roleTone(roleFamily: string) {
     manager: 'purple',
     team_leader: 'blue',
     agent: 'green',
-    branch_manager: 'yellow',
-    technician: 'neutral',
-    finance: 'yellow',
-    hr: 'purple',
   };
   return tones[roleFamily] ?? 'neutral';
 }

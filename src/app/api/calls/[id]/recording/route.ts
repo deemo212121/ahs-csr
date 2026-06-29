@@ -4,6 +4,10 @@ import { getSupabaseAdmin } from '@/lib/supabase/admin';
 
 const recordingBucket = process.env.CALL_RECORDINGS_BUCKET?.trim() || 'call-recordings';
 
+function baseMimeType(mime: string) {
+  return mime.split(';')[0]?.trim().toLowerCase() || 'audio/webm';
+}
+
 function extensionForMime(mime: string) {
   if (mime.includes('webm')) return 'webm';
   if (mime.includes('ogg')) return 'ogg';
@@ -33,6 +37,7 @@ async function ensureBucket() {
     const { error: createError } = await supabaseAdmin.storage.createBucket(recordingBucket, {
       public: false,
       fileSizeLimit: 1024 * 1024 * 80,
+      allowedMimeTypes: ['audio/webm', 'audio/ogg', 'audio/mp4', 'audio/mpeg', 'video/webm'],
     });
     if (createError && !createError.message.toLowerCase().includes('already exists')) {
       throw new Error(`Unable to create recording bucket "${recordingBucket}": ${createError.message}`);
@@ -60,7 +65,7 @@ export async function POST(
     if (!(file instanceof File)) throw new Error('Missing call recording file.');
     if (!file.size) throw new Error('Recording file is empty.');
 
-    const mimeType = file.type || 'audio/webm';
+    const mimeType = baseMimeType(file.type || 'audio/webm');
     const extension = extensionForMime(mimeType);
     const path = `${id}/${Date.now()}-${auth.profile.id}.${extension}`;
     const bytes = await file.arrayBuffer();
