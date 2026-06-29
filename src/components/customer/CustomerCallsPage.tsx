@@ -59,6 +59,10 @@ export function CustomerCallsPage() {
     return () => window.clearInterval(timer);
   }, [activeCall?.status, loadCalls]);
 
+  const handleCallEnded = useCallback(() => {
+    void loadCalls(true);
+  }, [loadCalls]);
+
   async function requestCall() {
     if (!user) return;
     setRequesting(true);
@@ -138,7 +142,7 @@ export function CustomerCallsPage() {
       </section>
 
       {activeCall ? (
-        <WebRtcCallRoom call={activeCall} participantRole="customer" onCallEnded={() => void loadCalls(true)} />
+        <WebRtcCallRoom call={activeCall} participantRole="customer" onCallEnded={handleCallEnded} />
       ) : (
         <section className="customer-call-waiting-card">
           <ShieldCheck size={30} />

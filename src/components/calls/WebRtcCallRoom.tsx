@@ -37,6 +37,10 @@ function signalBaseline(call: RtcCall) {
 
 export function WebRtcCallRoom({ call, participantRole, onCallEnded }: WebRtcCallRoomProps) {
   const { user } = useAuth();
+  const onCallEndedRef = useRef(onCallEnded);
+  useEffect(() => {
+    onCallEndedRef.current = onCallEnded;
+  }, [onCallEnded]);
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const localStreamRef = useRef<MediaStream | null>(null);
   const remoteAudioRef = useRef<HTMLAudioElement | null>(null);
@@ -91,6 +95,9 @@ export function WebRtcCallRoom({ call, participantRole, onCallEnded }: WebRtcCal
   );
 
   const cleanup = useCallback(() => {
+    if (pcRef.current) {
+      console.debug(`[webrtc:${participantRole}] close() — tearing down RTCPeerConnection at ${new Date().toISOString()}`);
+    }
     pcRef.current?.getSenders().forEach((sender) => {
       try {
         sender.track?.stop();
@@ -103,7 +110,7 @@ export function WebRtcCallRoom({ call, participantRole, onCallEnded }: WebRtcCal
     localStreamRef.current?.getTracks().forEach((track) => track.stop());
     localStreamRef.current = null;
     pendingCandidatesRef.current = [];
-  }, []);
+  }, [participantRole]);
 
   const endCall = useCallback(
     async (reason = 'Call ended by participant.') => {
@@ -117,10 +124,10 @@ export function WebRtcCallRoom({ call, participantRole, onCallEnded }: WebRtcCal
         cleanup();
         setConnectionState('closed');
         setStatus('Call ended.');
-        onCallEnded?.();
+        onCallEndedRef.current?.();
       }
     },
-    [cleanup, onCallEnded, patchCall, postSignal],
+    [cleanup, patchCall, postSignal],
   );
 
   useEffect(() => {
@@ -138,6 +145,10 @@ export function WebRtcCallRoom({ call, participantRole, onCallEnded }: WebRtcCal
     startSentRef.current = false;
     restartInFlightRef.current = false;
     lastRestartAtRef.current = 0;
+
+    function log(message: string) {
+      console.debug(`[webrtc:${participantRole}] ${message} at ${new Date().toISOString()}`);
+    }
 
     async function flushPendingCandidates() {
       const peer = pcRef.current;
@@ -160,6 +171,7 @@ export function WebRtcCallRoom({ call, participantRole, onCallEnded }: WebRtcCal
       if (cancelled) throw new Error('cancelled');
       setTurnConfigured(ice.configured);
 
+      log('Creating RTCPeerConnection');
       const peer = new RTCPeerConnection({ iceServers: ice.iceServers });
       pcRef.current = peer;
 
@@ -176,10 +188,16 @@ export function WebRtcCallRoom({ call, participantRole, onCallEnded }: WebRtcCal
         }
       };
 
+      peer.onsignalingstatechange = () => {
+        log(`signalingState -> ${peer.signalingState}`);
+      };
+
+      peer.oniceconnectionstatechange = () => {
+        log(`iceConnectionState -> ${peer.iceConnectionState}`);
+      };
+
       peer.onconnectionstatechange = () => {
-        console.debug(
-          `[webrtc:${participantRole}] connectionState -> ${peer.connectionState} (ice: ${peer.iceConnectionState}) at ${new Date().toISOString()}`,
-        );
+        log(`connectionState -> ${peer.connectionState}`);
         setConnectionState(peer.connectionState);
         if (peer.connectionState === 'connected') {
           setStatus('Connected — live audio is running.');
@@ -226,10 +244,12 @@ export function WebRtcCallRoom({ call, participantRole, onCallEnded }: WebRtcCal
       const peer = await ensurePeer();
       if (cancelled || peer.signalingState !== 'stable') return;
       setStatus('Calling support...');
+      log('createOffer() (initial)');
       const offer = await peer.createOffer({
         offerToReceiveAudio: true,
         offerToReceiveVideo: false,
       });
+      log('setLocalDescription() (initial offer)');
       await peer.setLocalDescription(offer);
       offerSentRef.current = true;
       await postSignal('offer', { description: peer.localDescription?.toJSON() ?? offer });
@@ -246,15 +266,18 @@ export function WebRtcCallRoom({ call, participantRole, onCallEnded }: WebRtcCal
       if (Date.now() - lastRestartAtRef.current < 8000) return;
       if (peer.signalingState !== 'stable') return;
 
+      log('restartIce triggered (connectionState was failed)');
       restartInFlightRef.current = true;
       lastRestartAtRef.current = Date.now();
       try {
+        log('createOffer() (iceRestart: true)');
         const offer = await peer.createOffer({
           iceRestart: true,
           offerToReceiveAudio: true,
           offerToReceiveVideo: false,
         });
         if (cancelled || peer.signalingState !== 'stable') return;
+        log('setLocalDescription() (ICE-restart offer)');
         await peer.setLocalDescription(offer);
         await postSignal('offer', { description: peer.localDescription?.toJSON() ?? offer });
       } catch {
@@ -287,9 +310,12 @@ export function WebRtcCallRoom({ call, participantRole, onCallEnded }: WebRtcCal
         const description = signal.payload.description;
         if (!isDescription(description)) return;
         setStatus('Customer is calling — connecting audio...');
+        log(`setRemoteDescription() (incoming offer, signal ${signal.id})`);
         await peer.setRemoteDescription(description);
         await flushPendingCandidates();
+        log('createAnswer()');
         const answer = await peer.createAnswer();
+        log('setLocalDescription() (answer)');
         await peer.setLocalDescription(answer);
         await postSignal('answer', { description: peer.localDescription?.toJSON() ?? answer });
       }
@@ -299,6 +325,7 @@ export function WebRtcCallRoom({ call, participantRole, onCallEnded }: WebRtcCal
         if (peer.signalingState !== 'have-local-offer') return;
         const description = signal.payload.description;
         if (!isDescription(description)) return;
+        log(`setRemoteDescription() (incoming answer, signal ${signal.id})`);
         await peer.setRemoteDescription(description);
         await flushPendingCandidates();
         setStatus('Audio handshake complete. Connecting...');
@@ -318,7 +345,7 @@ export function WebRtcCallRoom({ call, participantRole, onCallEnded }: WebRtcCal
         cleanup();
         setConnectionState('closed');
         setStatus('The other participant ended the call.');
-        onCallEnded?.();
+        onCallEndedRef.current?.();
       }
     }
 
@@ -359,7 +386,7 @@ export function WebRtcCallRoom({ call, participantRole, onCallEnded }: WebRtcCal
       if (heartbeatTimer) window.clearInterval(heartbeatTimer);
       cleanup();
     };
-  }, [call.accepted_at, call.id, call.queued_at, canJoin, cleanup, onCallEnded, participantRole, patchCall, postSignal, signalSessionId, user]);
+  }, [call.accepted_at, call.id, call.queued_at, canJoin, cleanup, participantRole, patchCall, postSignal, signalSessionId, user]);
 
   useEffect(() => {
     if (connectionState !== 'connected') return;

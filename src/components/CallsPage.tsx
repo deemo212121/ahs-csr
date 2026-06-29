@@ -434,6 +434,12 @@ export function CallsPage() {
     });
   }, [calls, search, selectedBranches]);
 
+  const handleCallEnded = useCallback(() => {
+    setActiveCall(null);
+    void loadCalls(true);
+    void loadCallHistory(true);
+  }, [loadCallHistory, loadCalls]);
+
   async function acceptCall(call: RtcCall) {
     if (!user) return;
     setError(null);
@@ -585,11 +591,7 @@ export function CallsPage() {
 
         <aside className="call-room-panel">
           {activeCall ? (
-            <WebRtcCallRoom call={activeCall} participantRole="staff" onCallEnded={() => {
-              setActiveCall(null);
-              void loadCalls(true);
-              void loadCallHistory(true);
-            }} />
+            <WebRtcCallRoom call={activeCall} participantRole="staff" onCallEnded={handleCallEnded} />
           ) : (
             <div className="call-room-placeholder">
               <span><ShieldCheck size={30} /></span>
