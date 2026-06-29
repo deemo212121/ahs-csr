@@ -151,7 +151,15 @@ function mapErStaffProfile(row: ErStaffProfileRow, role: Exclude<AppRole, 'custo
   };
 }
 
+const erStaffContextCache = new Map<string, { context: AuthContext; expiresAt: number }>();
+const ER_STAFF_CONTEXT_CACHE_TTL_MS = 30_000;
+
 async function getErStaffContext(firebaseUid: string, tokenEmail: string): Promise<AuthContext> {
+  const cached = erStaffContextCache.get(firebaseUid);
+  if (cached && cached.expiresAt > Date.now()) {
+    return cached.context;
+  }
+
   if (!isErSupabaseConfigured()) {
     throw new Error('ER Supabase is not configured for staff profile lookup.');
   }
@@ -180,7 +188,7 @@ async function getErStaffContext(firebaseUid: string, tokenEmail: string): Promi
   }
 
   const profile = mapErStaffProfile(erProfile, role);
-  return {
+  const context: AuthContext = {
     firebaseUid,
     firebaseIdToken: null,
     supabaseUserId: null,
@@ -189,6 +197,9 @@ async function getErStaffContext(firebaseUid: string, tokenEmail: string): Promi
     profile,
     profileSource: 'er',
   };
+
+  erStaffContextCache.set(firebaseUid, { context, expiresAt: Date.now() + ER_STAFF_CONTEXT_CACHE_TTL_MS });
+  return context;
 }
 
 function isTestLoginAllowed() {

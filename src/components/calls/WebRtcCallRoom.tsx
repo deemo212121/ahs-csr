@@ -72,6 +72,7 @@ export function WebRtcCallRoom({ call, participantRole, onCallEnded }: WebRtcCal
   const offerSentRef = useRef(false);
   const readySentRef = useRef(false);
   const startSentRef = useRef(false);
+  const reconnectTimerRef = useRef<number | null>(null);
   const [status, setStatus] = useState('Preparing secure audio room...');
   const [connectionState, setConnectionState] = useState<RTCPeerConnectionState>('new');
   const [muted, setMuted] = useState(false);
@@ -209,6 +210,10 @@ export function WebRtcCallRoom({ call, participantRole, onCallEnded }: WebRtcCal
   }, [participantRole, uploadRecording]);
 
   const cleanup = useCallback(() => {
+    if (reconnectTimerRef.current) {
+      window.clearTimeout(reconnectTimerRef.current);
+      reconnectTimerRef.current = null;
+    }
     stopRecording();
     pcRef.current?.getSenders().forEach((sender) => {
       try {
@@ -305,9 +310,18 @@ export function WebRtcCallRoom({ call, participantRole, onCallEnded }: WebRtcCal
             startSentRef.current = true;
             void patchCall('start');
           }
+          if (reconnectTimerRef.current) {
+            window.clearTimeout(reconnectTimerRef.current);
+            reconnectTimerRef.current = null;
+          }
         }
-        if (peer.connectionState === 'failed' || peer.connectionState === 'disconnected') {
+        if (peer.connectionState === 'disconnected') {
           setStatus('Connection is unstable. Reconnecting if possible...');
+          scheduleReconnect();
+        }
+        if (peer.connectionState === 'failed') {
+          setStatus('Connection is unstable. Reconnecting if possible...');
+          void restartConnection();
         }
       };
 
@@ -345,6 +359,41 @@ export function WebRtcCallRoom({ call, participantRole, onCallEnded }: WebRtcCal
       await peer.setLocalDescription(offer);
       offerSentRef.current = true;
       await postSignal('offer', { description: peer.localDescription?.toJSON() ?? offer });
+    }
+
+    async function restartConnection() {
+      const peer = pcRef.current;
+      if (!peer || cancelled || peer.signalingState === 'closed') return;
+      if (participantRole !== 'customer') {
+        setStatus('Connection dropped. Waiting for reconnection...');
+        return;
+      }
+      if (peer.signalingState !== 'stable') return;
+      try {
+        setStatus('Connection dropped. Reconnecting...');
+        const offer = await peer.createOffer({
+          iceRestart: true,
+          offerToReceiveAudio: true,
+          offerToReceiveVideo: false,
+        });
+        if (cancelled || peer.signalingState !== 'stable') return;
+        await peer.setLocalDescription(offer);
+        await postSignal('offer', { description: peer.localDescription?.toJSON() ?? offer });
+      } catch {
+        // Will retry on the next failed/disconnected transition.
+      }
+    }
+
+    function scheduleReconnect() {
+      if (reconnectTimerRef.current) window.clearTimeout(reconnectTimerRef.current);
+      reconnectTimerRef.current = window.setTimeout(() => {
+        reconnectTimerRef.current = null;
+        const peer = pcRef.current;
+        if (cancelled || !peer) return;
+        if (peer.connectionState === 'disconnected' || peer.connectionState === 'failed') {
+          void restartConnection();
+        }
+      }, 4000);
     }
 
     async function handleSignal(signal: CallSignal) {
@@ -427,7 +476,7 @@ export function WebRtcCallRoom({ call, participantRole, onCallEnded }: WebRtcCal
         await ensurePeer();
         await patchCall('heartbeat');
         await pollSignals();
-        signalTimer = window.setInterval(() => void pollSignals(), 3000);
+        signalTimer = window.setInterval(() => void pollSignals(), 1200);
         heartbeatTimer = window.setInterval(() => void patchCall('heartbeat'), 20000);
       } catch (error) {
         if (cancelled || (error instanceof Error && error.message === 'cancelled')) return;
@@ -449,7 +498,6 @@ export function WebRtcCallRoom({ call, participantRole, onCallEnded }: WebRtcCal
     call.id,
     call.queued_at,
     call.room_name,
-    call.updated_at,
     canJoin,
     cleanup,
     onCallEnded,
