@@ -34,6 +34,18 @@ async function assertCanAccessCall(callId: string, auth: AuthContext) {
   return data;
 }
 
+function normalizeTimestamp(value: string | null) {
+  if (!value) return null;
+  // A literal "+" in a timestamp's timezone offset (e.g. "...+00:00") can be
+  // corrupted into a space by query-string encoding layers upstream of the
+  // Supabase filter builder, which Postgres then rejects. Re-parsing and
+  // re-serializing via toISOString() always yields a "Z"-suffixed string
+  // with no "+", sidestepping that entirely.
+  const parsed = new Date(value.replace(' ', '+'));
+  if (!Number.isFinite(parsed.getTime())) return null;
+  return parsed.toISOString();
+}
+
 function missingCallSchemaMessage(error: unknown) {
   const message = error instanceof Error ? error.message : String(error ?? '');
   if (
@@ -59,7 +71,7 @@ export async function GET(
     await assertCanAccessCall(id, auth);
 
     const url = new URL(request.url);
-    const after = url.searchParams.get('after');
+    const after = normalizeTimestamp(url.searchParams.get('after'));
     let query = getSupabaseAdmin()
       .from('rtc_signals')
       .select('id, call_id, sender_profile_id, sender_role, signal_type, payload, created_at')
