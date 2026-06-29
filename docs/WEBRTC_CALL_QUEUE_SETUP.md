@@ -8,24 +8,36 @@ Run this SQL once in the main Supabase project:
 
 Do not run it in the ER / ah-solutions database.
 
-## Metered TURN env
+## TURN env
 
-Recommended option:
+`/api/calls/ice` tries these in order, so set whichever matches your provider:
 
-```env
-METERED_TURN_REST_URL=https://YOUR_METERED_APP.metered.live/api/v1/turn/credentials
-METERED_TURN_API_KEY=YOUR_METERED_TURN_API_KEY
-```
+1. A full ICE server array, if you copied one directly from your TURN provider:
 
-Alternative if you copied the full ICE server array from Metered:
+   ```env
+   METERED_TURN_ICE_SERVERS_JSON=[{"urls":"stun:..."},{"urls":"turn:...","username":"...","credential":"..."}]
+   ```
 
-```env
-METERED_TURN_ICE_SERVERS_JSON=[{"urls":"stun:..."},{"urls":"turn:...","username":"...","credential":"..."}]
-```
+2. Metered's dynamic per-call credential endpoint:
 
-After editing `.env.local`, restart `npm run dev`.
+   ```env
+   METERED_TURN_REST_URL=https://YOUR_METERED_APP.metered.live/api/v1/turn/credentials
+   METERED_TURN_API_KEY=YOUR_METERED_TURN_API_KEY
+   ```
 
-The browser receives only the ICE server list from `/api/calls/ice`; the Metered API key stays server-side.
+3. A static host + credential pair — works for any TURN provider (Metered static creds, ExpressTurn, coturn, etc.) despite the `METERED_` prefix in the var names:
+
+   ```env
+   METERED_TURN_HOST=free.expressturn.com:3478
+   METERED_TURN_USERNAME=...
+   METERED_TURN_CREDENTIAL=...
+   ```
+
+   If the host string includes a port (as ExpressTurn's does), it's used exactly as given. If it's a bare hostname (as Metered's relay is), `:80`/`:443`/`turns:443` variants are added automatically.
+
+After editing `.env.local`, restart `npm run dev`. On Cloudflare, set the username/credential with `wrangler secret put` rather than `wrangler.jsonc`'s plaintext `vars` — the host alone isn't sensitive, but the credential is.
+
+The browser only ever receives the resolved ICE server list from `/api/calls/ice`; the TURN credential stays server-side.
 
 ## Recordings
 

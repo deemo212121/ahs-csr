@@ -50,7 +50,8 @@
     "ER_DEFAULT_CUSTOMER_ID": "",
     "ER_DEFAULT_TICKET_SOURCE": "Customer Portal",
     "ER_DEFAULT_WARRANTY": "IW",
-    "METERED_TURN_REST_URL": "https://ushs.metered.live/api/v1/turn/credentials",
-    "METERED_TURN_API_KEY": "553d79d7926494818f11ba065c1273e39d3a"
+    "METERED_TURN_HOST": "free.expressturn.com:3478",
+    "METERED_TURN_USERNAME": "000000002098104499",
+    "METERED_TURN_CREDENTIAL": "Am7IK8Dxx6PDODfng77Bhm76/0s="
   }
 }

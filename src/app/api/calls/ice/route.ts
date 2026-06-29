@@ -15,6 +15,18 @@ function buildStaticMeteredServers() {
 
   if (!username || !credential || !host) return null;
 
+  // Some providers (e.g. ExpressTurn) hand out a host string that already
+  // includes the port (host:port), and only listen on that exact port —
+  // unlike Metered's relay, which answers on 80/443 too. Use it as-is rather
+  // than appending additional ports that may not exist on that server.
+  if (host.includes(':')) {
+    return [
+      { urls: `stun:${host}` },
+      { urls: `turn:${host}`, username, credential },
+      { urls: `turn:${host}?transport=tcp`, username, credential },
+    ] satisfies IceServerConfig[];
+  }
+
   return [
     { urls: `stun:${host}` },
     { urls: `turn:${host}:80`, username, credential },
