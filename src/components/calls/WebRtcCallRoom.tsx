@@ -72,7 +72,8 @@ export function WebRtcCallRoom({ call, participantRole, onCallEnded }: WebRtcCal
   const offerSentRef = useRef(false);
   const readySentRef = useRef(false);
   const startSentRef = useRef(false);
-  const reconnectTimerRef = useRef<number | null>(null);
+  const restartInFlightRef = useRef(false);
+  const lastRestartAtRef = useRef(0);
   const [status, setStatus] = useState('Preparing secure audio room...');
   const [connectionState, setConnectionState] = useState<RTCPeerConnectionState>('new');
   const [muted, setMuted] = useState(false);
@@ -210,10 +211,6 @@ export function WebRtcCallRoom({ call, participantRole, onCallEnded }: WebRtcCal
   }, [participantRole, uploadRecording]);
 
   const cleanup = useCallback(() => {
-    if (reconnectTimerRef.current) {
-      window.clearTimeout(reconnectTimerRef.current);
-      reconnectTimerRef.current = null;
-    }
     stopRecording();
     pcRef.current?.getSenders().forEach((sender) => {
       try {
@@ -261,6 +258,8 @@ export function WebRtcCallRoom({ call, participantRole, onCallEnded }: WebRtcCal
     offerSentRef.current = false;
     readySentRef.current = false;
     startSentRef.current = false;
+    restartInFlightRef.current = false;
+    lastRestartAtRef.current = 0;
 
     async function flushPendingCandidates() {
       const peer = pcRef.current;
@@ -302,6 +301,9 @@ export function WebRtcCallRoom({ call, participantRole, onCallEnded }: WebRtcCal
       };
 
       peer.onconnectionstatechange = () => {
+        console.debug(
+          `[webrtc:${participantRole}] connectionState -> ${peer.connectionState} (ice: ${peer.iceConnectionState}) at ${new Date().toISOString()}`,
+        );
         setConnectionState(peer.connectionState);
         if (peer.connectionState === 'connected') {
           setStatus('Connected — live audio is running.');
@@ -310,17 +312,15 @@ export function WebRtcCallRoom({ call, participantRole, onCallEnded }: WebRtcCal
             startSentRef.current = true;
             void patchCall('start');
           }
-          if (reconnectTimerRef.current) {
-            window.clearTimeout(reconnectTimerRef.current);
-            reconnectTimerRef.current = null;
-          }
         }
         if (peer.connectionState === 'disconnected') {
-          setStatus('Connection is unstable. Reconnecting if possible...');
-          scheduleReconnect();
+          // Often transient (a few seconds of dropped STUN keepalives). Browsers
+          // routinely recover from this on their own; do not force a renegotiation
+          // here, since that itself can re-trigger this same state and loop forever.
+          setStatus('Connection is unstable. Waiting to see if it recovers...');
         }
         if (peer.connectionState === 'failed') {
-          setStatus('Connection is unstable. Reconnecting if possible...');
+          setStatus('Connection dropped. Reconnecting...');
           void restartConnection();
         }
       };
@@ -368,9 +368,13 @@ export function WebRtcCallRoom({ call, participantRole, onCallEnded }: WebRtcCal
         setStatus('Connection dropped. Waiting for reconnection...');
         return;
       }
+      if (restartInFlightRef.current) return;
+      if (Date.now() - lastRestartAtRef.current < 8000) return;
       if (peer.signalingState !== 'stable') return;
+
+      restartInFlightRef.current = true;
+      lastRestartAtRef.current = Date.now();
       try {
-        setStatus('Connection dropped. Reconnecting...');
         const offer = await peer.createOffer({
           iceRestart: true,
           offerToReceiveAudio: true,
@@ -380,20 +384,10 @@ export function WebRtcCallRoom({ call, participantRole, onCallEnded }: WebRtcCal
         await peer.setLocalDescription(offer);
         await postSignal('offer', { description: peer.localDescription?.toJSON() ?? offer });
       } catch {
-        // Will retry on the next failed/disconnected transition.
+        // Will retry on the next failed transition, subject to the cooldown above.
+      } finally {
+        restartInFlightRef.current = false;
       }
-    }
-
-    function scheduleReconnect() {
-      if (reconnectTimerRef.current) window.clearTimeout(reconnectTimerRef.current);
-      reconnectTimerRef.current = window.setTimeout(() => {
-        reconnectTimerRef.current = null;
-        const peer = pcRef.current;
-        if (cancelled || !peer) return;
-        if (peer.connectionState === 'disconnected' || peer.connectionState === 'failed') {
-          void restartConnection();
-        }
-      }, 4000);
     }
 
     async function handleSignal(signal: CallSignal) {
