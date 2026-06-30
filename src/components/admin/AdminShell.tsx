@@ -24,6 +24,7 @@ import {
 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '@/components/AuthProvider';
+import { ThemeToggle } from '@/components/ThemeToggle';
 
 const navItems = [
   { href: '/admin/dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -205,6 +206,7 @@ export function AdminShell({
               </div>
             ) : null}
           </div>
+          <ThemeToggle />
         </div>
       </header>
 

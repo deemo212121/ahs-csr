@@ -3530,6 +3530,50 @@ a {
   --ushs-red: #ef4444;
 }
 
+html,
+body,
+*,
+*::before,
+*::after {
+  transition: background-color 240ms ease, border-color 240ms ease, color 240ms ease, box-shadow 240ms ease;
+}
+
+.theme-toggle {
+  align-items: center;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 999px;
+  display: inline-flex;
+  gap: 2px;
+  padding: 3px;
+}
+
+.theme-toggle-option {
+  align-items: center;
+  background: transparent;
+  border: none;
+  border-radius: 999px;
+  color: var(--ushs-muted);
+  cursor: pointer;
+  display: inline-flex;
+  font-size: 0.76rem;
+  font-weight: 700;
+  gap: 6px;
+  padding: 6px 12px;
+}
+
+.theme-toggle-option.active {
+  background: oklch(0.62 0.22 255);
+  color: #fff;
+}
+
+.login-theme-toggle {
+  position: absolute;
+  right: 20px;
+  top: 20px;
+  z-index: 5;
+}
+
 body {
   background:
     radial-gradient(circle at 18% 0%, oklch(0.62 0.22 255 / 0.14), transparent 34%),
@@ -12793,4 +12837,2882 @@ h1, h2, h3, h4, h5, h6,
     left: 12px !important;
     width: calc(100vw - 24px) !important;
   }
+}
+/* =========================================================
+   AUTO-GENERATED LIGHT THEME OVERRIDES
+   Generated from the dark theme above by classifying literal colors:
+   neutral/structural colors are remapped onto the light palette,
+   vivid brand/status colors are left untouched. Dark mode is unmodified.
+   ========================================================= */
+:root[data-theme="light"] {
+  --bg: #ffffff;
+  --surface: #ffffff;
+  --surface-2: #ffffff;
+  --line: #e2e8f0;
+  --shadow: 0 12px 28px rgba(245, 248, 251, 0.96);
+}
+
+html[data-theme="light"] .call-hero-panel,
+html[data-theme="light"] .customer-call-hero {
+  background: radial-gradient(circle at top left, rgba(0, 210, 255, 0.24), transparent 32%),
+    linear-gradient(135deg, rgba(245, 248, 251, 0.98), rgba(245, 248, 251, 0.96));
+}
+
+html[data-theme="light"] .call-hero-panel h1,
+html[data-theme="light"] .customer-call-hero h1 {
+  color: #000000;
+}
+
+html[data-theme="light"] .call-hero-panel p,
+html[data-theme="light"] .customer-call-hero p {
+  color: #4B5563;
+}
+
+html[data-theme="light"] .call-refresh-btn,
+html[data-theme="light"] .call-live-pill,
+html[data-theme="light"] .call-select-wrap,
+html[data-theme="light"] .branch-multi-select > button,
+html[data-theme="light"] .call-search-box {
+  background: rgba(245, 248, 251, 0.96);
+  color: #000000;
+}
+
+html[data-theme="light"] .call-metric-grid > div {
+  background: linear-gradient(180deg, rgba(241, 245, 249, 0.96), rgba(245, 248, 251, 0.96));
+}
+
+html[data-theme="light"] .call-metric-grid span,
+html[data-theme="light"] .call-metric-grid small {
+  color: #4B5563;
+}
+
+html[data-theme="light"] .call-queue-panel,
+html[data-theme="light"] .call-room-panel,
+html[data-theme="light"] .call-history-panel,
+html[data-theme="light"] .customer-call-action-panel,
+html[data-theme="light"] .customer-call-waiting-card {
+  background: linear-gradient(180deg, rgba(242, 246, 249, 0.96), rgba(246, 248, 251, 0.96));
+  box-shadow: inset 0 1px 0 rgba(226, 232, 240, 0.04);
+}
+
+html[data-theme="light"] .call-search-box input,
+html[data-theme="light"] .call-select-wrap select {
+  color: #000000;
+}
+
+html[data-theme="light"] .call-search-box input::placeholder {
+  color: #4B5563;
+}
+
+html[data-theme="light"] .call-select-wrap select option {
+  background: #f5f8fb;
+  color: #000000;
+}
+
+html[data-theme="light"] .branch-multi-menu {
+  background: #f5f8fb;
+}
+
+html[data-theme="light"] .branch-multi-actions button {
+  color: #000000;
+}
+
+html[data-theme="light"] .branch-check-list label {
+  background: rgba(226, 232, 240, 0.04);
+  border: 1px solid rgba(226, 232, 240, 0.08);
+  color: #000000;
+}
+
+html[data-theme="light"] .call-queue-headline h2 {
+  color: #000000;
+}
+
+html[data-theme="light"] .call-queue-headline span {
+  background: rgba(226, 232, 240, 0.08);
+  color: #4B5563;
+}
+
+html[data-theme="light"] .call-history-head h2 {
+  color: #000000;
+}
+
+html[data-theme="light"] .call-history-head p {
+  color: #4B5563;
+}
+
+html[data-theme="light"] .call-history-stats span {
+  color: #000000;
+}
+
+html[data-theme="light"] .call-history-list {
+  background: rgba(246, 249, 251, 0.96);
+}
+
+html[data-theme="light"] .call-history-row {
+  background: rgba(245, 248, 251, 0.96);
+  color: #000000;
+}
+
+html[data-theme="light"] .call-history-row:hover {
+  background: rgba(244, 247, 250, 0.96);
+}
+
+html[data-theme="light"] .call-history-row strong {
+  color: #000000;
+}
+
+html[data-theme="light"] .call-history-row small,
+html[data-theme="light"] .call-history-row > span {
+  color: #4B5563;
+}
+
+html[data-theme="light"] .call-history-row > span:last-child {
+  background: rgba(226, 232, 240, 0.06);
+  border: 1px solid rgba(226, 232, 240, 0.08);
+}
+
+html[data-theme="light"] .call-request-card {
+  background: rgba(246, 248, 251, 0.96);
+}
+
+html[data-theme="light"] .call-request-card.active,
+html[data-theme="light"] .call-request-card:hover {
+  background: rgba(244, 247, 250, 0.96);
+}
+
+html[data-theme="light"] .call-card-main strong {
+  color: #000000;
+}
+
+html[data-theme="light"] .call-card-main small,
+html[data-theme="light"] .call-card-meta span,
+html[data-theme="light"] .call-request-card p {
+  color: #4B5563;
+}
+
+html[data-theme="light"] .call-card-meta span {
+  background: rgba(226, 232, 240, 0.055);
+  border: 1px solid rgba(226, 232, 240, 0.07);
+}
+
+html[data-theme="light"] .call-open-btn {
+  color: #000000;
+}
+
+html[data-theme="light"] .call-ghost-btn {
+  background: rgba(226, 232, 240, 0.08);
+  color: #000000;
+}
+
+html[data-theme="light"] .call-room-placeholder,
+html[data-theme="light"] .call-empty-state,
+html[data-theme="light"] .customer-call-waiting-card {
+  color: #4B5563;
+}
+
+html[data-theme="light"] .webrtc-room-card {
+  background: radial-gradient(circle at top, rgba(26, 222, 255, 0.2), transparent 34%),
+    linear-gradient(180deg, rgba(245, 248, 251, 0.98), rgba(247, 249, 251, 0.98));
+  color: #000000;
+}
+
+html[data-theme="light"] .webrtc-room-top h3 {
+  color: #000000;
+}
+
+html[data-theme="light"] .webrtc-room-top p {
+  color: #4B5563;
+}
+
+html[data-theme="light"] .webrtc-state {
+  background: rgba(226, 232, 240, 0.08);
+  color: #000000;
+}
+
+html[data-theme="light"] .webrtc-state.failed,
+html[data-theme="light"] .webrtc-state.disconnected {
+  color: #000000;
+}
+
+html[data-theme="light"] .webrtc-avatar-ring {
+  background: radial-gradient(circle, rgba(28, 223, 255, 0.32), rgba(242, 246, 250, 0.96)),
+    #f4f7fa;
+}
+
+html[data-theme="light"] .webrtc-avatar-ring span {
+  color: #000000;
+}
+
+html[data-theme="light"] .webrtc-status-copy strong {
+  color: #000000;
+}
+
+html[data-theme="light"] .webrtc-status-copy small {
+  color: #4B5563;
+}
+
+html[data-theme="light"] .webrtc-control {
+  background: rgba(226, 232, 240, 0.08);
+  border: 1px solid rgba(226, 232, 240, 0.1);
+  color: #000000;
+}
+
+html[data-theme="light"] .call-room-alert {
+  color: #000000;
+}
+
+html[data-theme="light"] .customer-call-status-card {
+  background: rgba(226, 232, 240, 0.08);
+  border: 1px solid rgba(226, 232, 240, 0.12);
+  color: #000000;
+}
+
+html[data-theme="light"] .customer-call-action-panel h2 {
+  color: #000000;
+}
+
+html[data-theme="light"] .customer-call-action-panel p {
+  color: #4B5563;
+}
+
+html[data-theme="light"] .cx-action-btn.danger {
+  color: #000000;
+}
+
+html[data-theme="light"] .customer-call-history article {
+  background: rgba(245, 248, 251, 0.96);
+}
+
+html[data-theme="light"] .customer-call-history strong {
+  color: #000000;
+}
+
+html[data-theme="light"] .customer-call-history small {
+  color: #4B5563;
+}
+
+html[data-theme="light"] .call-manual-panel {
+  background: radial-gradient(circle at top left, rgba(34, 211, 238, 0.18), transparent 28%),
+    linear-gradient(180deg, #f4f7fa, #f6f8fb);
+  color: #000000;
+}
+
+html[data-theme="light"] .call-manual-panel header h2,
+html[data-theme="light"] .call-details-modal header h2 {
+  color: #000000;
+}
+
+html[data-theme="light"] .call-manual-panel header p,
+html[data-theme="light"] .call-details-modal header p {
+  color: #4B5563;
+}
+
+html[data-theme="light"] .call-manual-panel header button,
+html[data-theme="light"] .call-details-modal header button {
+  background: rgba(226, 232, 240, 0.08);
+  border: 1px solid rgba(226, 232, 240, 0.12);
+  color: #000000;
+}
+
+html[data-theme="light"] .call-manual-form label {
+  color: #4B5563;
+}
+
+html[data-theme="light"] .call-manual-form input,
+html[data-theme="light"] .call-manual-form textarea,
+html[data-theme="light"] .call-manual-form select {
+  background: rgba(246, 249, 251, 0.96);
+  color: #000000;
+}
+
+html[data-theme="light"] .call-manual-form select option {
+  background: #f5f8fb;
+  color: #000000;
+}
+
+html[data-theme="light"] .call-manual-check {
+  background: rgba(226, 232, 240, 0.05);
+  border: 1px solid rgba(226, 232, 240, 0.09);
+}
+
+html[data-theme="light"] .call-details-modal {
+  background: radial-gradient(circle at top left, rgba(34, 211, 238, 0.18), transparent 28%),
+    linear-gradient(180deg, #f4f7fa, #f6f8fb);
+  color: #000000;
+}
+
+html[data-theme="light"] .call-details-grid > div {
+  background: rgba(246, 249, 251, 0.96);
+}
+
+html[data-theme="light"] .call-details-grid span {
+  color: #4B5563;
+}
+
+html[data-theme="light"] .call-details-grid strong {
+  color: #000000;
+}
+
+html[data-theme="light"] .call-recording-card,
+html[data-theme="light"] .call-details-notes {
+  background: rgba(246, 249, 251, 0.96);
+}
+
+html[data-theme="light"] .call-recording-card > div {
+  color: #000000;
+}
+
+html[data-theme="light"] .call-recording-card p,
+html[data-theme="light"] .call-details-notes p,
+html[data-theme="light"] .call-details-notes small {
+  color: #4B5563;
+}
+
+html[data-theme="light"] .call-details-notes h3 {
+  color: #000000;
+}
+
+html[data-theme="light"] .login-screen {
+  background: #f6f9fb;
+}
+
+html[data-theme="light"] .login-panel {
+  background: #f5f8fb;
+  border: 1px solid #e2e8f0;
+  color: #000000;
+}
+
+html[data-theme="light"] .login-brand img {
+  background: #f7f9fc;
+}
+
+html[data-theme="light"] .login-panel .field label {
+  color: #000000;
+}
+
+html[data-theme="light"] .login-panel .field input {
+  background: #f6f9fb;
+  color: #000000;
+}
+
+html[data-theme="light"] .login-create span {
+  color: #000000;
+}
+
+html[data-theme="light"] .login-tabs {
+  background: #f6f9fb;
+  border: 1px solid #e2e8f0;
+}
+
+html[data-theme="light"] .login-tabs button {
+  color: #4B5563;
+}
+
+html[data-theme="light"] .notice {
+  background: #ffffff;
+}
+
+html[data-theme="light"] .field input,
+html[data-theme="light"] .field select,
+html[data-theme="light"] .field textarea {
+  background: #ffffff;
+}
+
+html[data-theme="light"] .btn-primary {
+  color: #000000;
+}
+
+html[data-theme="light"] .btn-danger {
+  color: #000000;
+}
+
+html[data-theme="light"] .sidebar {
+  background: #f5f8fb;
+  color: #000000;
+}
+
+html[data-theme="light"] .nav-item {
+  color: #4B5563;
+}
+
+html[data-theme="light"] .nav-item.active,
+html[data-theme="light"] .nav-item:hover {
+  background: rgba(226, 232, 240, 0.1);
+  color: #000000;
+}
+
+html[data-theme="light"] .customer-portal {
+  --customer-bg: #f6f8fb;
+  --customer-bg-2: #f5f8fb;
+  --customer-panel: rgba(244, 247, 250, 0.96);
+  --customer-panel-2: rgba(243, 246, 250, 0.96);
+  --customer-text: #000000;
+  --customer-muted: #4B5563;
+}
+
+html[data-theme="light"] .agent-portal {
+  --customer-text: #000000;
+  --customer-muted: #4B5563;
+  --customer-panel: rgba(246, 248, 251, 0.96);
+  --customer-panel-2: rgba(242, 246, 250, 0.96);
+  background: #f6f9fb;
+  color: #000000;
+}
+
+html[data-theme="light"] .agent-portal .sidebar {
+  background: #f7f9fb;
+  color: #000000;
+}
+
+html[data-theme="light"] .agent-portal .nav-item {
+  color: #4B5563;
+}
+
+html[data-theme="light"] .agent-portal .topbar {
+  background: #f6f9fb;
+  color: #000000;
+}
+
+html[data-theme="light"] .agent-portal .page {
+  background: #f6f9fb;
+}
+
+html[data-theme="light"] .agent-header-left strong,
+html[data-theme="light"] .agent-header-left b {
+  color: #000000;
+}
+
+html[data-theme="light"] .agent-header-left span {
+  color: #4B5563;
+}
+
+html[data-theme="light"] .agent-icon-btn.dark {
+  background: #f5f8fb;
+}
+
+html[data-theme="light"] .agent-portal .muted {
+  color: #4B5563;
+}
+
+html[data-theme="light"] .agent-profile-panel,
+html[data-theme="light"] .agent-panel,
+html[data-theme="light"] .agent-table-panel {
+  background: #f6f8fb;
+  border: 1px solid #e2e8f0;
+}
+
+html[data-theme="light"] .agent-eyebrow {
+  color: #4B5563;
+}
+
+html[data-theme="light"] .agent-profile-panel h1 {
+  color: #000000;
+}
+
+html[data-theme="light"] .agent-info-card,
+html[data-theme="light"] .agent-stat-card {
+  background: #f5f8fb;
+  border: 1px solid #e2e8f0;
+}
+
+html[data-theme="light"] .agent-info-card span,
+html[data-theme="light"] .agent-stat-card span,
+html[data-theme="light"] .agent-help-text {
+  color: #4B5563;
+}
+
+html[data-theme="light"] .agent-info-card strong {
+  color: #000000;
+}
+
+html[data-theme="light"] .agent-panel h2,
+html[data-theme="light"] .agent-table-panel h2 {
+  color: #4B5563;
+}
+
+html[data-theme="light"] .agent-stat-card strong {
+  color: #000000;
+}
+
+html[data-theme="light"] .agent-table-head {
+  background: #f3f6fa;
+  color: #000000;
+}
+
+html[data-theme="light"] .agent-table-row {
+  border-bottom: 1px solid #e2e8f0;
+  color: #000000;
+}
+
+html[data-theme="light"] .agent-empty-row {
+  border-bottom: 1px solid #e2e8f0;
+  color: #4B5563;
+}
+
+html[data-theme="light"] .leadership-panel-head h1,
+html[data-theme="light"] .leadership-section-head h2 {
+  color: #000000;
+}
+
+html[data-theme="light"] .leadership-section-head p,
+html[data-theme="light"] .leadership-chat-head span {
+  color: #4B5563;
+}
+
+html[data-theme="light"] .leadership-badge {
+  color: #000000;
+}
+
+html[data-theme="light"] .leadership-roster-card,
+html[data-theme="light"] .leadership-team-card {
+  background: #f5f8fb;
+  border: 1px solid #e2e8f0;
+}
+
+html[data-theme="light"] .leadership-roster-card strong,
+html[data-theme="light"] .leadership-team-card strong,
+html[data-theme="light"] .leadership-status-copy strong {
+  color: #000000;
+}
+
+html[data-theme="light"] .leadership-roster-card span,
+html[data-theme="light"] .leadership-roster-card small,
+html[data-theme="light"] .leadership-team-card span,
+html[data-theme="light"] .leadership-team-card-body span,
+html[data-theme="light"] .leadership-status-copy span,
+html[data-theme="light"] .leadership-thread-list button span,
+html[data-theme="light"] .leadership-thread-list button small {
+  color: #4B5563;
+}
+
+html[data-theme="light"] .leadership-thread-list button {
+  background: #f5f8fb;
+  border: 1px solid #e2e8f0;
+  color: #000000;
+}
+
+html[data-theme="light"] .leadership-chat-compose {
+  border-top: 1px solid #e2e8f0;
+}
+
+html[data-theme="light"] .leadership-chat-compose input {
+  background: #f6f9fb;
+  border: 1px solid #e2e8f0;
+  color: #000000;
+}
+
+html[data-theme="light"] .customer-portal .sidebar {
+  background: rgba(246, 249, 251, 0.96);
+}
+
+html[data-theme="light"] .customer-portal .topbar {
+  background: rgba(244, 247, 250, 0.96);
+}
+
+html[data-theme="light"] .customer-portal .btn-secondary {
+  background: rgba(244, 247, 250, 0.96);
+}
+
+html[data-theme="light"] .customer-portal .panel,
+html[data-theme="light"] .customer-portal .field input,
+html[data-theme="light"] .customer-portal .field select,
+html[data-theme="light"] .customer-portal .field textarea {
+  background: rgba(246, 248, 251, 0.96);
+}
+
+html[data-theme="light"] .customer-hero {
+  background: linear-gradient(135deg, rgba(241, 245, 249, 0.96), rgba(245, 248, 251, 0.96));
+}
+
+html[data-theme="light"] .customer-hero-meter {
+  background: rgba(246, 248, 251, 0.96);
+}
+
+html[data-theme="light"] .customer-search {
+  background: rgba(246, 248, 251, 0.96);
+}
+
+html[data-theme="light"] .customer-filter-chips button {
+  background: rgba(246, 248, 251, 0.96);
+}
+
+html[data-theme="light"] .customer-alert {
+  color: #000000;
+}
+
+html[data-theme="light"] .customer-message-list button {
+  background: rgba(246, 248, 251, 0.96);
+}
+
+html[data-theme="light"] .chat-bubble.received {
+  background: rgba(246, 248, 251, 0.96);
+}
+
+html[data-theme="light"] .customer-chat-compose input {
+  background: rgba(246, 248, 251, 0.96);
+}
+
+html[data-theme="light"] .request-section {
+  background: rgba(246, 248, 251, 0.96);
+}
+
+html[data-theme="light"] .checkbox-line {
+  background: rgba(255, 255, 255, 0.96);
+}
+
+html[data-theme="light"] .checkbox-line input {
+  accent-color: #f2f6f9;
+}
+
+html[data-theme="light"] .photo-upload {
+  background: rgba(246, 248, 251, 0.96);
+}
+
+html[data-theme="light"] .admin-shell {
+  --admin-bg: #f6f9fb;
+  --admin-panel: #f6f8fb;
+  --admin-panel-2: #f5f8fb;
+  --admin-line: #e2e8f0;
+  --admin-text: #000000;
+  --admin-muted: #4B5563;
+  background: #f6f9fb;
+}
+
+html[data-theme="light"] .admin-topbar {
+  background: #f6f9fb;
+}
+
+html[data-theme="light"] .admin-icon-btn.ghost {
+  background: #f5f8fb;
+}
+
+html[data-theme="light"] .admin-user-chip {
+  background: #f5f8fb;
+}
+
+html[data-theme="light"] .admin-sidebar {
+  background: rgba(246, 248, 251, 0.98);
+}
+
+html[data-theme="light"] .admin-nav a.active,
+html[data-theme="light"] .admin-nav a:hover {
+  color: #000000;
+}
+
+html[data-theme="light"] .admin-portal .field input,
+html[data-theme="light"] .admin-portal .field select,
+html[data-theme="light"] .admin-portal .field textarea,
+html[data-theme="light"] .admin-chat-compose input {
+  background: #f6f9fb;
+}
+
+html[data-theme="light"] .admin-portal .field select option {
+  background: #f6f9fb;
+}
+
+html[data-theme="light"] .admin-portal .btn-secondary {
+  background: #f5f8fb;
+}
+
+html[data-theme="light"] .admin-portal .panel-head,
+html[data-theme="light"] .admin-portal .data-table th,
+html[data-theme="light"] .admin-data-table th {
+  background: #f4f7fa;
+}
+
+:root[data-theme="light"] {
+  --background: #f4f7fa;
+  --foreground: #000000;
+  --card: #f3f6fa;
+  --secondary: #f1f5f9;
+  --muted-foreground: #4B5563;
+  --panel: rgba(226, 232, 240, 0.08);
+  --panel-border: rgba(226, 232, 240, 0.15);
+  --ushs-bg-1: #f6f8fb;
+  --ushs-bg-2: #f5f8fb;
+  --ushs-bg-3: #f4f7fa;
+  --ushs-panel: rgba(243, 247, 250, 0.96);
+  --ushs-panel-strong: rgba(243, 246, 250, 0.96);
+  --ushs-text: #000000;
+  --ushs-muted: #4B5563;
+}
+
+html[data-theme="light"] .theme-toggle {
+  background: rgba(226, 232, 240, 0.08);
+  border: 1px solid rgba(226, 232, 240, 0.14);
+}
+
+html[data-theme="light"] body {
+  background: radial-gradient(circle at 18% 0%, oklch(0.62 0.22 255 / 0.14), transparent 34%),
+    linear-gradient(135deg, var(--background) 0%, #f5f8fb 100%) fixed !important;
+}
+
+html[data-theme="light"] body::before {
+  background-image: linear-gradient(rgba(226, 232, 240, 0.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(226, 232, 240, 0.018) 1px, transparent 1px);
+}
+
+html[data-theme="light"] .login-page-shell,
+html[data-theme="light"] .login-screen {
+  background: radial-gradient(circle at 18% 0%, oklch(0.62 0.22 255 / 0.14), transparent 34%),
+    linear-gradient(135deg, #f4f7fa, #f3f6fa) !important;
+}
+
+html[data-theme="light"] .login-card,
+html[data-theme="light"] .login-panel {
+  background: rgba(243, 246, 250, 0.96) !important;
+  border: 1px solid rgba(226, 232, 240, 0.15) !important;
+  color: #000000 !important;
+}
+
+html[data-theme="light"] .login-header {
+  background: linear-gradient(135deg, #f5f8fb 0%, #f4f7fa 100%) !important;
+  color: #000000 !important;
+  border-bottom: 1px solid rgba(226, 232, 240, 0.12) !important;
+}
+
+html[data-theme="light"] .login-header h2 {
+  color: #000000 !important;
+}
+
+html[data-theme="light"] .login-body label,
+html[data-theme="light"] .login-panel .field label,
+html[data-theme="light"] .remember-text,
+html[data-theme="light"] .create-account-text {
+  color: #000000 !important;
+}
+
+html[data-theme="light"] .form-control,
+html[data-theme="light"] .login-body input[type='email'],
+html[data-theme="light"] .login-body input[type='password'],
+html[data-theme="light"] .login-body input[type='text'] {
+  background-color: #ffffff !important;
+}
+
+html[data-theme="light"] .form-control:focus,
+html[data-theme="light"] .login-body input:focus {
+  background-color: #ffffff !important;
+}
+
+html[data-theme="light"] .create-account-btn,
+html[data-theme="light"] .create-account-btn:link,
+html[data-theme="light"] .create-account-btn:visited,
+html[data-theme="light"] .create-account-btn:hover,
+html[data-theme="light"] .create-account-btn:focus,
+html[data-theme="light"] .create-account-btn:active {
+  background: #ffffff !important;
+  border: 2px solid #e2e8f0 !important;
+}
+
+html[data-theme="light"] .create-account-btn:hover {
+  background: #ffffff !important;
+  border-color: #e2e8f0 !important;
+}
+
+html[data-theme="light"] .login-alert {
+  color: #000000 !important;
+}
+
+html[data-theme="light"] .login-alert.success {
+  color: #000000 !important;
+}
+
+html[data-theme="light"] .portal,
+html[data-theme="light"] .customer-portal,
+html[data-theme="light"] .agent-portal,
+html[data-theme="light"] .admin-shell {
+  background: radial-gradient(circle at 18% 0%, rgba(50, 79, 156, 0.18) 0%, transparent 34%),
+    linear-gradient(135deg, var(--ushs-bg-1) 0%, #f5f8fb 42%, var(--ushs-bg-3) 100%) fixed !important;
+}
+
+html[data-theme="light"] .portal .sidebar,
+html[data-theme="light"] .portal .topbar,
+html[data-theme="light"] .admin-topbar,
+html[data-theme="light"] .admin-sidebar,
+html[data-theme="light"] .agent-portal .sidebar,
+html[data-theme="light"] .agent-portal .topbar,
+html[data-theme="light"] .customer-portal .sidebar,
+html[data-theme="light"] .customer-portal .topbar {
+  background: rgba(246, 248, 251, 0.96) !important;
+}
+
+html[data-theme="light"] .panel,
+html[data-theme="light"] .stat,
+html[data-theme="light"] .agent-profile-panel,
+html[data-theme="light"] .agent-panel,
+html[data-theme="light"] .agent-table-panel,
+html[data-theme="light"] .agent-info-card,
+html[data-theme="light"] .agent-stat-card,
+html[data-theme="light"] .leadership-roster-card,
+html[data-theme="light"] .leadership-team-card,
+html[data-theme="light"] .leadership-thread-list button,
+html[data-theme="light"] .customer-hero,
+html[data-theme="light"] .customer-stat-card,
+html[data-theme="light"] .customer-service-tile,
+html[data-theme="light"] .customer-action-tile,
+html[data-theme="light"] .customer-request-card,
+html[data-theme="light"] .customer-filter-panel,
+html[data-theme="light"] .customer-notification-card,
+html[data-theme="light"] .customer-profile-card,
+html[data-theme="light"] .customer-profile-item,
+html[data-theme="light"] .customer-message-requests,
+html[data-theme="light"] .customer-chat-panel,
+html[data-theme="light"] .customer-alert,
+html[data-theme="light"] .customer-empty,
+html[data-theme="light"] .request-section,
+html[data-theme="light"] .admin-stat-card,
+html[data-theme="light"] .admin-panel,
+html[data-theme="light"] .admin-team-card,
+html[data-theme="light"] .admin-roster-card,
+html[data-theme="light"] .admin-announcement-card,
+html[data-theme="light"] .admin-info-card,
+html[data-theme="light"] .admin-link-card,
+html[data-theme="light"] .admin-compact-row,
+html[data-theme="light"] .admin-activity-row,
+html[data-theme="light"] .admin-setting-row {
+  background: linear-gradient(180deg, rgba(242, 246, 250, 0.96), rgba(244, 247, 250, 0.96)) !important;
+}
+
+html[data-theme="light"] .field input,
+html[data-theme="light"] .field select,
+html[data-theme="light"] .field textarea,
+html[data-theme="light"] .customer-portal .field input,
+html[data-theme="light"] .customer-portal .field select,
+html[data-theme="light"] .customer-portal .field textarea,
+html[data-theme="light"] .admin-portal .field input,
+html[data-theme="light"] .admin-portal .field select,
+html[data-theme="light"] .admin-portal .field textarea,
+html[data-theme="light"] .leadership-chat-compose input,
+html[data-theme="light"] .customer-chat-compose input {
+  background-color: #ffffff !important;
+}
+
+html[data-theme="light"] .field select option,
+html[data-theme="light"] .admin-portal .field select option,
+html[data-theme="light"] .customer-portal .field select option {
+  background: #ffffff !important;
+}
+
+html[data-theme="light"] .btn,
+html[data-theme="light"] .btn-primary,
+html[data-theme="light"] .admin-portal .btn-primary,
+html[data-theme="light"] .customer-portal .btn-primary {
+  background: linear-gradient(135deg, #f3f6fa, #088395) !important;
+}
+
+html[data-theme="light"] .btn-secondary,
+html[data-theme="light"] .admin-portal .btn-secondary,
+html[data-theme="light"] .customer-portal .btn-secondary {
+  background: rgba(226, 232, 240, 0.08) !important;
+  border: 1px solid rgba(226, 232, 240, 0.12) !important;
+  color: #000000 !important;
+}
+
+html[data-theme="light"] .data-table th,
+html[data-theme="light"] .admin-data-table th,
+html[data-theme="light"] .agent-table-head {
+  background: rgba(226, 232, 240, 0.11) !important;
+  color: #000000 !important;
+}
+
+html[data-theme="light"] .data-table td,
+html[data-theme="light"] .admin-data-table td,
+html[data-theme="light"] .agent-table-row {
+  color: #000000 !important;
+}
+
+html[data-theme="light"] .topbar,
+html[data-theme="light"] .agent-portal .topbar,
+html[data-theme="light"] .admin-topbar {
+  border-bottom: 1px solid rgba(226, 232, 240, 0.12) !important;
+}
+
+html[data-theme="light"] .agent-icon-btn,
+html[data-theme="light"] .admin-icon-btn {
+  background: rgba(226, 232, 240, 0.07) !important;
+  border: 1px solid rgba(226, 232, 240, 0.12) !important;
+  color: #000000 !important;
+}
+
+html[data-theme="light"] .admin-sidebar {
+  background: linear-gradient(180deg, #f3f7fa 0%, #f5f8fb 100%) !important;
+}
+
+html[data-theme="light"] .admin-nav a.active,
+html[data-theme="light"] .admin-nav a:hover {
+  color: #000000 !important;
+}
+
+html[data-theme="light"] .admin-shell {
+  --admin-bg: #f5f8fb;
+  --admin-panel: #f4f7fa;
+  --admin-panel-2: #f4f7fa;
+  --admin-line: rgba(226, 232, 240, 0.13);
+  --admin-line-strong: rgba(226, 232, 240, 0.21);
+  --admin-text: #000000;
+  --admin-muted: #4B5563;
+  background: radial-gradient(circle at 18% 0%, oklch(0.62 0.22 255 / 0.13), transparent 34%),
+    linear-gradient(135deg, var(--admin-bg) 0%, #f6f8fb 100%) fixed;
+}
+
+html[data-theme="light"] .admin-shell::before {
+  background-image: linear-gradient(rgba(226, 232, 240, 0.022) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(226, 232, 240, 0.016) 1px, transparent 1px);
+}
+
+html[data-theme="light"] .admin-topbar {
+  background: rgba(244, 247, 250, 0.96);
+  border-bottom: 1px solid rgba(226, 232, 240, 0.12);
+}
+
+html[data-theme="light"] .admin-icon-btn {
+  border: 1px solid rgba(226, 232, 240, 0.12);
+}
+
+html[data-theme="light"] .admin-icon-btn.ghost {
+  background: rgba(226, 232, 240, 0.07);
+}
+
+html[data-theme="light"] .admin-sidebar {
+  background: linear-gradient(180deg, #f3f7fa 0%, #f5f8fb 100%);
+}
+
+html[data-theme="light"] .admin-sidebar-head {
+  background: rgba(226, 232, 240, 0.04);
+}
+
+html[data-theme="light"] .admin-account-menu {
+  background: rgba(243, 247, 250, 0.98);
+  border: 1px solid rgba(226, 232, 240, 0.15);
+}
+
+html[data-theme="light"] .admin-hero-card {
+  background: linear-gradient(135deg, #f3f6fa, #f4f7fa);
+}
+
+html[data-theme="light"] .admin-php-hero,
+html[data-theme="light"] .admin-php-counter,
+html[data-theme="light"] .admin-php-form-panel,
+html[data-theme="light"] .admin-php-table-panel,
+html[data-theme="light"] .admin-easy-note,
+html[data-theme="light"] .admin-activity-filter,
+html[data-theme="light"] .admin-log-card {
+  background: rgba(244, 247, 250, 0.96);
+  color: #000000;
+}
+
+html[data-theme="light"] .admin-php-hero-title > span {
+  color: #000000;
+}
+
+html[data-theme="light"] .admin-php-hero-title h1 {
+  color: #000000;
+}
+
+html[data-theme="light"] .admin-php-hero-title p {
+  color: #4B5563;
+}
+
+html[data-theme="light"] .admin-php-counter span {
+  color: #4B5563;
+}
+
+html[data-theme="light"] .admin-php-counter strong {
+  color: #000000;
+}
+
+html[data-theme="light"] .admin-php-counter b {
+  color: #000000;
+}
+
+html[data-theme="light"] .admin-php-panel-head {
+  background: rgba(226, 232, 240, 0.055);
+}
+
+html[data-theme="light"] .admin-php-panel-head h2 {
+  color: #000000;
+}
+
+html[data-theme="light"] .admin-php-panel-head span {
+  color: #000000;
+}
+
+html[data-theme="light"] .admin-php-inline-form label,
+html[data-theme="light"] .admin-activity-filter label {
+  color: #000000;
+}
+
+html[data-theme="light"] .admin-php-inline-form input,
+html[data-theme="light"] .admin-table-input,
+html[data-theme="light"] .admin-edit-name input,
+html[data-theme="light"] .admin-activity-filter input,
+html[data-theme="light"] .admin-activity-filter select {
+  background: rgba(246, 248, 251, 0.96) !important;
+  color: #000000 !important;
+}
+
+html[data-theme="light"] .admin-php-inline-form input::placeholder,
+html[data-theme="light"] .admin-activity-filter input::placeholder {
+  color: #000000 !important;
+}
+
+html[data-theme="light"] .admin-outline-button {
+  background: rgba(226, 232, 240, 0.06);
+}
+
+html[data-theme="light"] .admin-php-table th {
+  background: rgba(226, 232, 240, 0.16);
+  color: #000000;
+}
+
+html[data-theme="light"] .admin-php-table td {
+  color: #000000;
+}
+
+html[data-theme="light"] .admin-id-pill,
+html[data-theme="light"] .admin-count-pill {
+  color: #000000;
+}
+
+html[data-theme="light"] .admin-edit-name span {
+  color: #000000;
+}
+
+html[data-theme="light"] .admin-row-actions button {
+  color: #000000;
+}
+
+html[data-theme="light"] .admin-easy-note {
+  color: #000000;
+}
+
+html[data-theme="light"] .admin-log-date strong,
+html[data-theme="light"] .admin-log-main h3,
+html[data-theme="light"] .admin-log-actor strong {
+  color: #000000;
+}
+
+html[data-theme="light"] .admin-log-date span,
+html[data-theme="light"] .admin-log-actor span,
+html[data-theme="light"] .admin-log-actor small,
+html[data-theme="light"] .admin-log-main p {
+  color: #000000;
+}
+
+html[data-theme="light"] .admin-log-tags span,
+html[data-theme="light"] .admin-log-tags b {
+  color: #000000;
+}
+
+html[data-theme="light"] .register-page-shell {
+  background: radial-gradient(circle at 50% 0%, rgba(49, 113, 255, 0.16), transparent 34%),
+    linear-gradient(135deg, #f5f8fb 0%, #f6f9fb 54%, #f4f7fa 100%) fixed;
+  color: #000000;
+}
+
+html[data-theme="light"] .register-card-php {
+  background: rgba(246, 249, 251, 0.96);
+}
+
+html[data-theme="light"] .register-header-php {
+  background: radial-gradient(circle at 50% 4%, rgba(226, 232, 240, 0.22), transparent 36%),
+    linear-gradient(135deg, #5e72df 0%, #764eb5 100%);
+}
+
+html[data-theme="light"] .register-header-php svg {
+  filter: drop-shadow(0 10px 20px rgba(248, 250, 252, 0.96));
+}
+
+html[data-theme="light"] .register-body-php label,
+html[data-theme="light"] .register-field {
+  color: #000000;
+}
+
+html[data-theme="light"] .register-body-php input,
+html[data-theme="light"] .register-body-php textarea {
+  background: #f6f9fb !important;
+  color: #000000 !important;
+}
+
+html[data-theme="light"] .register-body-php input::placeholder {
+  color: #4B5563 !important;
+}
+
+html[data-theme="light"] .register-input-icon > svg {
+  background: #f4f7fa;
+  color: #000000;
+}
+
+html[data-theme="light"] .register-input-icon.with-toggle button {
+  background: #f4f7fa;
+  color: #000000;
+}
+
+html[data-theme="light"] .register-body-php small {
+  color: #4B5563;
+}
+
+html[data-theme="light"] .readonly-location {
+  background: #f5f8fb !important;
+  color: #4B5563 !important;
+}
+
+html[data-theme="light"] .zip-status.muted {
+  color: #4B5563 !important;
+}
+
+html[data-theme="light"] .terms-check-php {
+  background: rgba(246, 249, 251, 0.96);
+}
+
+html[data-theme="light"] .terms-check-php label {
+  color: #000000;
+}
+
+html[data-theme="light"] .login-link-php {
+  color: #000000;
+}
+
+html[data-theme="light"] .login-link-php a {
+  color: #000000;
+}
+
+html[data-theme="light"] .register-modal {
+  background: #f6f8fb;
+  color: #000000;
+}
+
+html[data-theme="light"] .register-modal footer {
+  background: rgba(246, 249, 251, 0.96);
+}
+
+html[data-theme="light"] .register-modal h2 {
+  color: #000000 !important;
+}
+
+html[data-theme="light"] .register-modal header button {
+  background: rgba(246, 248, 251, 0.96);
+  color: #000000;
+}
+
+html[data-theme="light"] .register-modal .terms-copy {
+  background: linear-gradient(180deg, rgba(226, 232, 240, 0.035), rgba(226, 232, 240, 0.01)),
+    #f6f9fb;
+  scrollbar-color: #38bdf8 #f6f8fb;
+}
+
+html[data-theme="light"] .register-modal .terms-copy h6 {
+  color: #000000;
+}
+
+html[data-theme="light"] .register-modal .terms-copy p {
+  color: #4B5563;
+}
+
+html[data-theme="light"] .admin-sidebar-head {
+  background: linear-gradient(180deg, rgba(22,139,255,.12), rgba(226, 232, 240, 0.035)) !important;
+}
+
+html[data-theme="light"] .admin-sidebar-close {
+  background: rgba(226, 232, 240, 0.08);
+  border: 1px solid rgba(226, 232, 240, 0.13);
+  color: #000000;
+}
+
+html[data-theme="light"] .admin-customer-search input,
+html[data-theme="light"] .admin-request-search input,
+html[data-theme="light"] .admin-request-toolbar select,
+html[data-theme="light"] .admin-settings-form input,
+html[data-theme="light"] .admin-password-field input {
+  background: rgba(246, 248, 251, 0.96) !important;
+  color: #000000 !important;
+}
+
+html[data-theme="light"] .admin-customer-name small,
+html[data-theme="light"] .admin-contact-lines span {
+  color: #4B5563;
+}
+
+html[data-theme="light"] .admin-status-pill.active {
+  color: #000000;
+}
+
+html[data-theme="light"] .admin-status-pill.inactive {
+  color: #000000;
+}
+
+html[data-theme="light"] .admin-mini-pill {
+  color: #000000;
+}
+
+html[data-theme="light"] .admin-request-toolbar label {
+  color: #000000;
+}
+
+html[data-theme="light"] .admin-request-status.progress {
+  color: #000000;
+}
+
+html[data-theme="light"] .admin-request-status.completed {
+  color: #000000;
+}
+
+html[data-theme="light"] .admin-request-status.cancelled {
+  color: #000000;
+}
+
+html[data-theme="light"] .admin-profile-hero {
+  background: rgba(244, 247, 250, 0.96);
+}
+
+html[data-theme="light"] .admin-profile-avatar {
+  border: 2px solid rgba(226, 232, 240, 0.15);
+}
+
+html[data-theme="light"] .admin-profile-hero h2 {
+  color: #000000;
+}
+
+html[data-theme="light"] .admin-profile-hero p {
+  color: #000000;
+}
+
+html[data-theme="light"] .admin-settings-form label {
+  color: #000000;
+}
+
+html[data-theme="light"] .admin-password-field svg {
+  color: #000000;
+}
+
+html[data-theme="light"] .admin-password-note {
+  background: rgba(245, 248, 251, 0.96);
+  color: #000000;
+}
+
+html[data-theme="light"] .admin-record-note {
+  color: #000000;
+}
+
+html[data-theme="light"] .agent-portal {
+  background: #f6f9fb;
+  color: #000000;
+}
+
+html[data-theme="light"] .agent-portal .topbar {
+  background: #f6f9fb;
+}
+
+html[data-theme="light"] .agent-portal .page {
+  background: #f6f9fb;
+}
+
+html[data-theme="light"] .agent-back-button {
+  background: #f5f8fb !important;
+}
+
+html[data-theme="light"] .agent-user-pill {
+  background: #f5f8fb;
+  color: #000000;
+}
+
+html[data-theme="light"] .agent-avatar {
+  background: #f1f5f9;
+  color: #000000;
+}
+
+html[data-theme="light"] .agent-user-copy small {
+  color: #4B5563;
+}
+
+html[data-theme="light"] .agent-user-menu,
+html[data-theme="light"] .agent-notification-panel {
+  background: #f5f8fb;
+}
+
+html[data-theme="light"] .agent-user-menu a,
+html[data-theme="light"] .agent-user-menu button {
+  color: #000000;
+}
+
+html[data-theme="light"] .agent-notification-item > span {
+  background: #f1f5f9;
+}
+
+html[data-theme="light"] .agent-notification-item p {
+  color: #4B5563;
+}
+
+html[data-theme="light"] .agent-side-drawer {
+  background: #f6f9fb;
+  color: #000000;
+}
+
+html[data-theme="light"] .agent-side-logo strong {
+  color: #000000;
+}
+
+html[data-theme="light"] .agent-side-logo span {
+  color: #4B5563;
+}
+
+html[data-theme="light"] .agent-side-nav a,
+html[data-theme="light"] .agent-side-logout {
+  color: #000000;
+}
+
+html[data-theme="light"] .agent-side-nav a.active,
+html[data-theme="light"] .agent-side-nav a:hover {
+  color: #000000;
+}
+
+html[data-theme="light"] .agent-portal .sidebar {
+  background: #f6f9fb;
+}
+
+html[data-theme="light"] .php-manager-page {
+  color: #000000;
+}
+
+html[data-theme="light"] .manager-quick-actions .btn,
+html[data-theme="light"] .manager-page-hero .btn,
+html[data-theme="light"] .manager-call-filters .btn {
+  background: #f6f8fb;
+  border-color: #e2e8f0;
+  color: #000000;
+}
+
+html[data-theme="light"] .manager-section h2,
+html[data-theme="light"] .manager-chart-panel h2,
+html[data-theme="light"] .manager-list-head h2 {
+  color: #000000;
+}
+
+html[data-theme="light"] .manager-section h2 span {
+  color: #4B5563;
+}
+
+html[data-theme="light"] .manager-stat-card {
+  background: #f6f9fb;
+  border: 1px solid #e2e8f0;
+}
+
+html[data-theme="light"] .manager-stat-icon {
+  color: #4B5563;
+}
+
+html[data-theme="light"] .manager-stat-card strong {
+  color: #000000;
+}
+
+html[data-theme="light"] .manager-stat-card span {
+  color: #4B5563;
+}
+
+html[data-theme="light"] .manager-chart-panel,
+html[data-theme="light"] .manager-list-panel,
+html[data-theme="light"] .manager-table-panel,
+html[data-theme="light"] .manager-page-hero,
+html[data-theme="light"] .manager-page-title-row,
+html[data-theme="light"] .manager-manual-form-panel {
+  background: #f6f9fb;
+  border: 1px solid #e2e8f0;
+}
+
+html[data-theme="light"] .manager-chart-head h2,
+html[data-theme="light"] .manager-section-title-row h2 {
+  color: #000000;
+}
+
+html[data-theme="light"] .manager-chart-head p,
+html[data-theme="light"] .manager-section-title-row p {
+  color: #4B5563;
+}
+
+html[data-theme="light"] .manager-view-all-button {
+  color: #000000;
+}
+
+html[data-theme="light"] .manager-chart-legend {
+  color: #4B5563;
+}
+
+html[data-theme="light"] .manager-bar-group small {
+  color: #4B5563;
+}
+
+html[data-theme="light"] .manager-donut::after {
+  background: #f6f9fb;
+}
+
+html[data-theme="light"] .manager-donut-legend {
+  color: #4B5563;
+}
+
+html[data-theme="light"] .manager-team-card {
+  background: #f6f9fb;
+  border: 1px solid #e2e8f0;
+}
+
+html[data-theme="light"] .manager-team-head small {
+  color: #4B5563;
+}
+
+html[data-theme="light"] .manager-team-head button {
+  color: #4B5563;
+}
+
+html[data-theme="light"] .manager-team-lines span {
+  color: #4B5563;
+}
+
+html[data-theme="light"] .manager-team-agents span,
+html[data-theme="light"] .manager-team-agents em {
+  background: rgba(245, 248, 251, 0.96);
+  color: #000000;
+}
+
+html[data-theme="light"] .manager-team-agents b {
+  color: #000000;
+}
+
+html[data-theme="light"] .manager-section-title-row {
+  background: #f6f9fb;
+  border: 1px solid #e2e8f0;
+}
+
+html[data-theme="light"] .manager-performance-modal {
+  background: radial-gradient(circle at top left, rgba(34, 211, 238, 0.12), transparent 34%),
+    linear-gradient(160deg, #f6f9fb 0%, #f5f8fb 55%, #f7f9fb 100%);
+  color: #000000;
+}
+
+html[data-theme="light"] .manager-performance-modal h2 {
+  color: #000000;
+}
+
+html[data-theme="light"] .manager-performance-modal p {
+  color: #4B5563;
+}
+
+html[data-theme="light"] .manager-performance-modal header button {
+  color: #000000;
+}
+
+html[data-theme="light"] .manager-performance-modal header button:hover {
+  color: #000000;
+}
+
+html[data-theme="light"] .manager-performance-modal-body {
+  scrollbar-color: rgba(34, 211, 238, 0.54) rgba(246, 248, 251, 0.96);
+}
+
+html[data-theme="light"] .manager-performance-line-card {
+  background: radial-gradient(circle at top right, rgba(96, 165, 250, 0.12), transparent 34%),
+    rgba(247, 249, 251, 0.96);
+}
+
+html[data-theme="light"] .manager-performance-line-head h3 {
+  color: #000000;
+}
+
+html[data-theme="light"] .manager-performance-line-head p {
+  color: #4B5563;
+}
+
+html[data-theme="light"] .manager-performance-line-legend span {
+  color: #4B5563;
+}
+
+html[data-theme="light"] .manager-performance-line-scroll {
+  scrollbar-color: rgba(34, 211, 238, 0.54) rgba(246, 248, 251, 0.96);
+}
+
+html[data-theme="light"] .manager-line-point {
+  stroke: #f7f9fb;
+}
+
+html[data-theme="light"] .manager-filter-row input,
+html[data-theme="light"] .manager-filter-row select,
+html[data-theme="light"] .manager-request-controls input,
+html[data-theme="light"] .manager-request-controls select,
+html[data-theme="light"] .manager-call-filters select,
+html[data-theme="light"] .manager-verification-filters input,
+html[data-theme="light"] .manager-verification-filters select,
+html[data-theme="light"] .manager-manual-form-panel input,
+html[data-theme="light"] .manager-manual-form-panel select,
+html[data-theme="light"] .manager-manual-form-panel textarea {
+  background: #f5f8fb;
+  border: 1px solid #e2e8f0;
+  color: #000000;
+}
+
+html[data-theme="light"] .manager-empty-state,
+html[data-theme="light"] .manager-empty-cell {
+  color: #4B5563;
+}
+
+html[data-theme="light"] .manager-page-hero h1,
+html[data-theme="light"] .manager-page-title-row h1 {
+  color: #000000;
+}
+
+html[data-theme="light"] .manager-page-hero p,
+html[data-theme="light"] .manager-page-title-row p {
+  color: #4B5563;
+}
+
+html[data-theme="light"] .manager-ticket-stats > div {
+  background: #f6f9fb;
+  border: 1px solid #e2e8f0;
+}
+
+html[data-theme="light"] .manager-ticket-stats span {
+  color: #4B5563;
+}
+
+html[data-theme="light"] .manager-ticket-stats strong {
+  color: #000000;
+}
+
+html[data-theme="light"] .manager-ticket-stats i {
+  background: #f3f6fa;
+}
+
+html[data-theme="light"] .manager-table-headline {
+  background: #f4f7fa;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+html[data-theme="light"] .manager-table-headline.subtle {
+  background: #f6f9fb;
+}
+
+html[data-theme="light"] .manager-table-headline h2 {
+  color: #000000;
+}
+
+html[data-theme="light"] .manager-table-headline span {
+  background: #f3f6fa;
+}
+
+html[data-theme="light"] .manager-table-headline p {
+  color: #4B5563;
+}
+
+html[data-theme="light"] .manager-request-controls {
+  background: #f6f9fb;
+}
+
+html[data-theme="light"] .manager-data-table {
+  color: #000000;
+}
+
+html[data-theme="light"] .manager-data-table th {
+  background: #f2f6fa;
+  color: #000000;
+}
+
+html[data-theme="light"] .manager-data-table td {
+  border-bottom: 1px solid #e2e8f0;
+}
+
+html[data-theme="light"] .manager-data-table td span:not(.manager-status-pill):not(.manager-date-pill):not(.manager-area-pill) {
+  color: #4B5563;
+}
+
+html[data-theme="light"] .manager-date-pill {
+  background: #f6f9fb;
+  border: 1px solid #e2e8f0;
+  color: #000000;
+}
+
+html[data-theme="light"] .manager-status-pill.completed {
+  color: #000000;
+}
+
+html[data-theme="light"] .manager-status-pill.cancelled {
+  color: #000000;
+}
+
+html[data-theme="light"] .manager-action-buttons button,
+html[data-theme="light"] .manager-stack-actions button,
+html[data-theme="light"] .manager-batch-bar button {
+  color: #000000;
+}
+
+html[data-theme="light"] .manager-verification-filters {
+  background: #f6f9fb;
+  border: 1px solid #e2e8f0;
+}
+
+html[data-theme="light"] .manager-verification-filters label {
+  color: #000000;
+}
+
+html[data-theme="light"] .manager-verification-filters small {
+  color: #4B5563;
+}
+
+html[data-theme="light"] .manager-batch-bar {
+  background: #f5f8fb;
+}
+
+html[data-theme="light"] .manager-batch-bar span {
+  color: #4B5563;
+}
+
+html[data-theme="light"] .manager-manual-form-panel {
+  background: #f4f7fa;
+}
+
+html[data-theme="light"] .manager-manual-form-panel .request-section-title {
+  color: #000000;
+}
+
+html[data-theme="light"] .manager-manual-form-panel .field label {
+  color: #000000;
+}
+
+html[data-theme="light"] .manager-manual-form-panel small {
+  color: #4B5563;
+}
+
+html[data-theme="light"] .team-leader-page .php-tl-profile {
+  background: #f6f9fb;
+  border: 1px solid #e2e8f0;
+}
+
+html[data-theme="light"] .tl-filter-grid label span {
+  color: #000000;
+}
+
+html[data-theme="light"] .tl-filter-grid label small,
+html[data-theme="light"] .tl-status-note {
+  color: #4B5563;
+}
+
+html[data-theme="light"] .tl-select-all {
+  color: #000000;
+}
+
+html[data-theme="light"] .manager-status.rejected {
+  color: #000000;
+}
+
+html[data-theme="light"] .tl-warning-box {
+  color: #000000;
+}
+
+html[data-theme="light"] .tl-warning-box p {
+  color: #4B5563;
+}
+
+html[data-theme="light"] .customer-portal {
+  --cx-bg: #f6f9fb;
+  --cx-bg-2: #f5f8fb;
+  --cx-panel: #f5f8fb;
+  --cx-panel-2: #f3f7fa;
+  --cx-line: #e2e8f0;
+  --cx-text: #000000;
+  --cx-muted: #4B5563;
+  background: linear-gradient(120deg, #f5f8fb 0%, #f5f8fb 100%);
+}
+
+html[data-theme="light"] .customer-topbar {
+  background: #f6f9fb;
+}
+
+html[data-theme="light"] .customer-icon-btn {
+  background: #f5f8fb;
+}
+
+html[data-theme="light"] .customer-page-title {
+  border-left: 1px solid rgba(226, 232, 240, 0.16);
+}
+
+html[data-theme="light"] .customer-user-pill {
+  background: #f5f8fb;
+  border: 1px solid #e2e8f0;
+  color: #000000;
+}
+
+html[data-theme="light"] .customer-user-menu,
+html[data-theme="light"] .customer-notification-menu {
+  background: #f5f8fb;
+  border: 1px solid #e2e8f0;
+  color: #000000;
+}
+
+html[data-theme="light"] .customer-user-menu a,
+html[data-theme="light"] .customer-user-menu button {
+  border-bottom: 1px solid rgba(226, 232, 240, 0.12);
+  color: #000000;
+}
+
+html[data-theme="light"] .customer-portal .page {
+  background: linear-gradient(120deg, #f5f8fb 0%, #f5f8fb 100%);
+}
+
+html[data-theme="light"] .customer-bottom-nav {
+  background: linear-gradient(135deg, rgba(246, 249, 251, 0.96), rgba(245, 248, 251, 0.96));
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.38), inset 0 1px 0 rgba(226, 232, 240, 0.08);
+}
+
+html[data-theme="light"] .customer-bottom-nav a {
+  color: #4B5563;
+}
+
+html[data-theme="light"] .customer-bottom-nav a svg {
+  background: rgba(226, 232, 240, 0.06);
+  border: 1px solid rgba(226, 232, 240, 0.08);
+}
+
+html[data-theme="light"] .customer-bottom-nav a:hover {
+  background: rgba(226, 232, 240, 0.06);
+}
+
+html[data-theme="light"] .customer-bottom-nav a.active {
+  color: #000000;
+}
+
+html[data-theme="light"] .cx-welcome-panel,
+html[data-theme="light"] .cx-stat-card,
+html[data-theme="light"] .cx-shortcut-grid a,
+html[data-theme="light"] .cx-service-card,
+html[data-theme="light"] .cx-recent-card,
+html[data-theme="light"] .cx-request-card,
+html[data-theme="light"] .cx-profile-hero,
+html[data-theme="light"] .cx-edit-profile-card,
+html[data-theme="light"] .cx-my-request-stats > div,
+html[data-theme="light"] .customer-filter-panel,
+html[data-theme="light"] .cx-message-requests,
+html[data-theme="light"] .cx-chat-panel {
+  background: rgba(245, 248, 251, 0.96);
+}
+
+html[data-theme="light"] .cx-welcome-profile p {
+  color: #000000;
+}
+
+html[data-theme="light"] .cx-hero-question {
+  color: #000000;
+}
+
+html[data-theme="light"] .cx-action-btn.light {
+  background: #ffffff;
+}
+
+html[data-theme="light"] .cx-shortcut-grid a {
+  color: #000000;
+}
+
+html[data-theme="light"] .cx-shortcut-grid a svg {
+  color: #000000;
+}
+
+html[data-theme="light"] .cx-section-title {
+  background: rgba(226, 232, 240, 0.06);
+}
+
+html[data-theme="light"] .cx-service-card {
+  color: #000000;
+}
+
+html[data-theme="light"] .cx-service-card span,
+html[data-theme="light"] .cx-service-icon {
+  color: #000000;
+}
+
+html[data-theme="light"] .cx-status-pill {
+  color: #000000;
+}
+
+html[data-theme="light"] .cx-status-pill.new-request,
+html[data-theme="light"] .cx-status-pill.pending {
+  color: #000000;
+}
+
+html[data-theme="light"] .cx-request-page .request-section {
+  background: #f3f7fa;
+  border: 1px solid #e2e8f0;
+}
+
+html[data-theme="light"] .cx-request-page .request-section-title {
+  background: rgba(226, 232, 240, 0.1);
+}
+
+html[data-theme="light"] .cx-request-page .field input,
+html[data-theme="light"] .cx-request-page .field textarea,
+html[data-theme="light"] .cx-request-page .field select,
+html[data-theme="light"] .cx-profile-form input,
+html[data-theme="light"] .cx-profile-form textarea {
+  background: #f6f8fb;
+  color: #000000;
+}
+
+html[data-theme="light"] .cx-request-page .field input:disabled {
+  background: #f6f8fb;
+  color: #000000;
+}
+
+html[data-theme="light"] .cx-request-page .checkbox-line {
+  background: rgba(246, 248, 251, 0.96);
+  color: #000000 !important;
+}
+
+html[data-theme="light"] .cx-request-card {
+  background: #f3f7fa;
+}
+
+html[data-theme="light"] .cx-request-footer {
+  border-top: 1px solid rgba(226, 232, 240, 0.22);
+}
+
+html[data-theme="light"] .cx-request-footer a {
+  color: #000000;
+}
+
+html[data-theme="light"] .cx-message-requests,
+html[data-theme="light"] .cx-chat-panel {
+  background: #f4f7fa;
+}
+
+html[data-theme="light"] .cx-message-list button {
+  background: #f3f7fa;
+  border: 1px solid #e2e8f0;
+}
+
+html[data-theme="light"] .cx-message-list button small {
+  color: #000000;
+}
+
+html[data-theme="light"] .cx-profile-avatar {
+  color: #000000;
+}
+
+html[data-theme="light"] .cx-card-title {
+  background: rgba(226, 232, 240, 0.06);
+}
+
+html[data-theme="light"] .portal .field input,
+html[data-theme="light"] .portal .field select,
+html[data-theme="light"] .portal .field textarea,
+html[data-theme="light"] .portal .manager-manual-form-panel input,
+html[data-theme="light"] .portal .manager-manual-form-panel select,
+html[data-theme="light"] .portal .manager-manual-form-panel textarea,
+html[data-theme="light"] .portal .cx-profile-form input,
+html[data-theme="light"] .portal .cx-profile-form textarea,
+html[data-theme="light"] .portal .admin-password-field input,
+html[data-theme="light"] .portal .leadership-chat-compose input,
+html[data-theme="light"] .portal .customer-chat-compose input {
+  background: rgba(246, 249, 251, 0.96) !important;
+  box-shadow: inset 0 1px 0 rgba(226, 232, 240, 0.035), 0 0 0 1px rgba(8, 131, 149, 0.04) !important;
+  color: #000000 !important;
+}
+
+html[data-theme="light"] .portal .field input:disabled,
+html[data-theme="light"] .portal .field select:disabled,
+html[data-theme="light"] .portal .field textarea:disabled,
+html[data-theme="light"] .portal .manager-manual-form-panel input:disabled,
+html[data-theme="light"] .portal .manager-manual-form-panel select:disabled,
+html[data-theme="light"] .portal .manager-manual-form-panel textarea:disabled {
+  background: rgba(245, 248, 251, 0.96) !important;
+  color: #000000 !important;
+}
+
+html[data-theme="light"] .portal .field input::placeholder,
+html[data-theme="light"] .portal .field textarea::placeholder,
+html[data-theme="light"] .portal .manager-manual-form-panel input::placeholder,
+html[data-theme="light"] .portal .manager-manual-form-panel textarea::placeholder,
+html[data-theme="light"] .portal .customer-chat-compose input::placeholder,
+html[data-theme="light"] .portal .leadership-chat-compose input::placeholder {
+  color: rgba(226, 232, 240, 0.58) !important;
+}
+
+html[data-theme="light"] .portal .field input:focus,
+html[data-theme="light"] .portal .field select:focus,
+html[data-theme="light"] .portal .field textarea:focus,
+html[data-theme="light"] .portal .manager-manual-form-panel input:focus,
+html[data-theme="light"] .portal .manager-manual-form-panel select:focus,
+html[data-theme="light"] .portal .manager-manual-form-panel textarea:focus {
+  box-shadow: 0 0 0 3px rgba(34, 211, 238, 0.12), inset 0 1px 0 rgba(226, 232, 240, 0.045) !important;
+}
+
+html[data-theme="light"] .portal .field select option,
+html[data-theme="light"] .portal .manager-manual-form-panel select option,
+html[data-theme="light"] .admin-portal .field select option,
+html[data-theme="light"] .customer-portal .field select option {
+  background: #f6f9fb !important;
+  color: #000000 !important;
+}
+
+html[data-theme="light"] .portal .checkbox-line,
+html[data-theme="light"] .portal .manual-checkbox {
+  background: rgba(246, 248, 251, 0.96) !important;
+  color: #000000 !important;
+}
+
+html[data-theme="light"] .portal .photo-upload {
+  background: rgba(246, 249, 251, 0.96) !important;
+  color: #000000 !important;
+}
+
+html[data-theme="light"] .portal .photo-upload span,
+html[data-theme="light"] .portal .photo-count,
+html[data-theme="light"] .portal .field small,
+html[data-theme="light"] .portal .manual-zip-message {
+  color: rgba(226, 232, 240, 0.78) !important;
+}
+
+html[data-theme="light"] .customer-portal .request-section,
+html[data-theme="light"] .agent-portal .manager-manual-form-panel .request-section,
+html[data-theme="light"] .agent-portal .manager-manual-form-panel {
+  background: linear-gradient(180deg, rgba(243, 246, 250, 0.96), rgba(244, 247, 250, 0.96)) !important;
+}
+
+html[data-theme="light"] .customer-portal .request-section-title,
+html[data-theme="light"] .agent-portal .request-section-title {
+  color: #000000 !important;
+}
+
+html[data-theme="light"] .portal .manager-manual-form-panel .request-section {
+  background: #f4f7fa !important;
+}
+
+html[data-theme="light"] .portal .manager-manual-form-panel .request-section-title {
+  color: #000000 !important;
+}
+
+html[data-theme="light"] .portal .manager-manual-form-panel .manual-checkbox {
+  color: #000000 !important;
+}
+
+html[data-theme="light"] .portal .manager-manual-form-panel input,
+html[data-theme="light"] .portal .manager-manual-form-panel select,
+html[data-theme="light"] .portal .manager-manual-form-panel textarea {
+  background: #f6f9fb !important;
+  color: #000000 !important;
+}
+
+html[data-theme="light"] .er-ticket-list-table th {
+  background: #f1f5f9;
+}
+
+html[data-theme="light"] .er-ticket-list-table td {
+  color: #4B5563;
+}
+
+html[data-theme="light"] .er-ticket-view-note {
+  color: #4B5563;
+}
+
+html[data-theme="light"] .er-columns-pill {
+  background: #f4f7fa;
+  color: #000000;
+}
+
+html[data-theme="light"] .er-ticket-modal-card {
+  background: linear-gradient(180deg, #f5f8fb, #f6f9fb);
+  color: #000000;
+}
+
+html[data-theme="light"] .er-ticket-modal-head {
+  background: linear-gradient(135deg, rgba(241, 245, 249, 0.96), rgba(242, 246, 249, 0.96));
+}
+
+html[data-theme="light"] .er-ticket-modal-head span {
+  color: #000000;
+}
+
+html[data-theme="light"] .er-ticket-modal-head h3 {
+  color: #000000;
+}
+
+html[data-theme="light"] .er-ticket-modal-head p {
+  color: #4B5563;
+}
+
+html[data-theme="light"] .er-ticket-modal-close {
+  background: rgba(246, 248, 251, 0.96);
+  border: 1px solid rgba(226, 232, 240, 0.18);
+  color: #000000;
+}
+
+html[data-theme="light"] .er-ticket-detail-section {
+  background: rgba(246, 248, 251, 0.96);
+}
+
+html[data-theme="light"] .er-ticket-detail-section h4 {
+  color: #000000;
+}
+
+html[data-theme="light"] .er-ticket-detail-row {
+  background: rgba(247, 249, 252, 0.96);
+}
+
+html[data-theme="light"] .er-ticket-detail-row span {
+  color: #4B5563;
+}
+
+html[data-theme="light"] .er-ticket-detail-row strong {
+  color: #000000;
+}
+
+html[data-theme="light"] .verification-modal-actions button {
+  color: #000000;
+}
+
+html[data-theme="light"] .admin-sidebar-head.compact {
+  background: rgba(246, 248, 251, 0.96) !important;
+}
+
+html[data-theme="light"] .admin-log-title-button {
+  color: #000000;
+}
+
+html[data-theme="light"] .admin-log-actor {
+  background: rgba(246, 248, 251, 0.96);
+}
+
+html[data-theme="light"] .admin-log-small-link {
+  color: #000000;
+}
+
+html[data-theme="light"] .admin-log-modal {
+  background: linear-gradient(180deg, rgba(245, 248, 251, 0.98), rgba(246, 248, 251, 0.98));
+  color: #000000;
+}
+
+html[data-theme="light"] .admin-log-modal-head h2 {
+  color: #000000;
+}
+
+html[data-theme="light"] .admin-log-modal-head button {
+  background: rgba(226, 232, 240, 0.08);
+  border: 1px solid rgba(226, 232, 240, 0.14);
+  color: #000000;
+}
+
+html[data-theme="light"] .admin-log-detail-grid section,
+html[data-theme="light"] .admin-log-before-after section,
+html[data-theme="light"] .admin-log-change-box {
+  background: rgba(246, 248, 251, 0.96);
+}
+
+html[data-theme="light"] .admin-log-detail-grid strong,
+html[data-theme="light"] .admin-log-before-after strong {
+  color: #000000;
+}
+
+html[data-theme="light"] .admin-log-detail-grid small {
+  color: #4B5563;
+}
+
+html[data-theme="light"] .admin-log-change-box p {
+  color: #000000;
+}
+
+html[data-theme="light"] .admin-notification-panel {
+  background: #f5f8fb;
+  color: #000000;
+}
+
+html[data-theme="light"] .admin-notification-panel .agent-popover-head span {
+  color: #4B5563;
+}
+
+html[data-theme="light"] .admin-notification-item {
+  color: #000000;
+}
+
+html[data-theme="light"] .admin-notification-item > span {
+  background: #f1f5f9;
+}
+
+html[data-theme="light"] .admin-notification-item p {
+  color: #4B5563;
+}
+
+html[data-theme="light"] .ticket-message-search {
+  background: #f6f9fb;
+  border: 1px solid #e2e8f0;
+  color: #000000;
+}
+
+html[data-theme="light"] .ticket-thread-list button small {
+  color: #4B5563;
+}
+
+html[data-theme="light"] .ticket-chat-head {
+  border-bottom: 1px solid #e2e8f0;
+}
+
+html[data-theme="light"] .ticket-chat-head span {
+  color: #4B5563;
+}
+
+html[data-theme="light"] .ticket-chat-details,
+html[data-theme="light"] .customer-chat-ticket-summary {
+  background: rgba(246, 249, 251, 0.96);
+}
+
+html[data-theme="light"] .ticket-chat-details span,
+html[data-theme="light"] .customer-chat-ticket-summary span {
+  color: #4B5563;
+}
+
+html[data-theme="light"] .chat-bubble small {
+  color: rgba(226, 232, 240, 0.72);
+}
+
+html[data-theme="light"] .message-empty-state {
+  color: #4B5563;
+}
+
+html[data-theme="light"] .message-empty-state strong {
+  color: #000000;
+}
+
+html[data-theme="light"] .customer-quick-replies button {
+  color: #000000;
+}
+
+html[data-theme="light"] .cx-view-details-button {
+  color: #000000;
+}
+
+html[data-theme="light"] .manager-er-sync-panel {
+  background: rgba(245, 248, 251, 0.96);
+}
+
+html[data-theme="light"] .manager-er-sync-panel strong {
+  color: #000000;
+}
+
+html[data-theme="light"] .manager-er-sync-panel span {
+  color: #4B5563;
+}
+
+html[data-theme="light"] .admin-panel-link {
+  color: #000000;
+}
+
+html[data-theme="light"] .admin-panel-link:hover,
+html[data-theme="light"] .admin-panel-link:focus-visible {
+  color: #000000;
+}
+
+html[data-theme="light"] .admin-activity-row--dashboard {
+  background: linear-gradient(135deg, rgba(245, 248, 251, 0.96), rgba(246, 248, 251, 0.96));
+}
+
+html[data-theme="light"] .admin-activity-row--dashboard:hover,
+html[data-theme="light"] .admin-activity-row--dashboard:focus-visible {
+  background: linear-gradient(135deg, rgba(23, 139, 255, 0.14), rgba(246, 248, 251, 0.98));
+}
+
+html[data-theme="light"] .admin-activity-title-line strong {
+  color: #000000;
+}
+
+html[data-theme="light"] .admin-activity-row--dashboard p {
+  color: #000000;
+}
+
+html[data-theme="light"] .admin-activity-meta {
+  color: #4B5563;
+}
+
+html[data-theme="light"] .admin-activity-row--dashboard time {
+  color: #000000;
+}
+
+html[data-theme="light"] .admin-cities-badge {
+  color: #000000;
+}
+
+html[data-theme="light"] .admin-cities-badge.blue {
+  color: #000000;
+}
+
+html[data-theme="light"] .admin-cities-refresh,
+html[data-theme="light"] .admin-cities-clear,
+html[data-theme="light"] .admin-cities-pagination button {
+  color: #000000;
+}
+
+html[data-theme="light"] .admin-cities-search,
+html[data-theme="light"] .admin-cities-select {
+  background: rgba(247, 249, 251, 0.96);
+  color: #4B5563;
+}
+
+html[data-theme="light"] .admin-cities-search input,
+html[data-theme="light"] .admin-cities-select select {
+  color: #000000;
+}
+
+html[data-theme="light"] .admin-cities-select select option {
+  background: #f5f8fb;
+  color: #000000;
+}
+
+html[data-theme="light"] .admin-cities-clear {
+  color: #4B5563;
+}
+
+html[data-theme="light"] .admin-cities-workspace {
+  background: rgba(247, 249, 251, 0.96);
+}
+
+html[data-theme="light"] .admin-cities-location-rail {
+  background: radial-gradient(circle at 10% 0%, rgba(6, 182, 212, 0.09), transparent 32%),
+    rgba(246, 249, 251, 0.96);
+}
+
+html[data-theme="light"] .admin-cities-rail-head strong {
+  color: #000000;
+}
+
+html[data-theme="light"] .admin-cities-location-list button {
+  color: #000000;
+}
+
+html[data-theme="light"] .admin-cities-location-list strong {
+  color: #000000;
+}
+
+html[data-theme="light"] .admin-cities-location-list small {
+  color: #4B5563;
+}
+
+html[data-theme="light"] .admin-cities-sync-note {
+  color: #4B5563;
+}
+
+html[data-theme="light"] .admin-cities-location-hero {
+  background: radial-gradient(circle at 100% 0%, rgba(59, 130, 246, 0.12), transparent 42%),
+    linear-gradient(135deg, rgba(8, 145, 178, 0.1), rgba(245, 248, 251, 0.96));
+}
+
+html[data-theme="light"] .admin-cities-location-hero h2 {
+  color: #000000;
+}
+
+html[data-theme="light"] .admin-cities-location-hero p {
+  color: #4B5563;
+}
+
+html[data-theme="light"] .admin-cities-location-metrics > div {
+  background: rgba(246, 249, 251, 0.96);
+}
+
+html[data-theme="light"] .admin-cities-location-metrics strong {
+  color: #000000;
+}
+
+html[data-theme="light"] .admin-cities-location-metrics span {
+  color: #4B5563;
+}
+
+html[data-theme="light"] .admin-cities-top-cities,
+html[data-theme="light"] .admin-cities-table-section {
+  background: rgba(246, 249, 251, 0.96);
+}
+
+html[data-theme="light"] .admin-cities-section-head h3 {
+  color: #000000;
+}
+
+html[data-theme="light"] .admin-cities-section-head p {
+  color: #4B5563;
+}
+
+html[data-theme="light"] .admin-cities-city-grid article {
+  background: rgba(245, 248, 251, 0.96);
+}
+
+html[data-theme="light"] .admin-cities-city-grid span {
+  color: #000000;
+}
+
+html[data-theme="light"] .admin-cities-city-grid small {
+  color: #4B5563;
+}
+
+html[data-theme="light"] .admin-cities-table th {
+  background: #f3f7fa !important;
+  background-color: #f3f7fa !important;
+  color: #000000;
+}
+
+html[data-theme="light"] .admin-cities-pagination {
+  color: #4B5563;
+}
+
+html[data-theme="light"] .admin-cities-pagination button {
+  color: #000000;
+}
+
+html[data-theme="light"] .admin-cities-dedupe-note {
+  color: #4B5563;
+}
+
+html[data-theme="light"] .admin-cities-dedupe-note strong {
+  color: #000000;
+}
+
+html[data-theme="light"] .admin-activity-row-actions span {
+  color: #000000 !important;
+}
+
+html[data-theme="light"] .admin-staff-search,
+html[data-theme="light"] .admin-staff-filter {
+  background: rgba(247, 249, 252, 0.96);
+  color: #000000;
+}
+
+html[data-theme="light"] .admin-staff-search input,
+html[data-theme="light"] .admin-staff-filter select {
+  color: #000000;
+}
+
+html[data-theme="light"] .admin-staff-filter select option {
+  background: #f5f8fb;
+  color: #000000;
+}
+
+html[data-theme="light"] .admin-staff-table th {
+  background: rgba(247, 249, 251, 0.96);
+}
+
+html[data-theme="light"] .admin-staff-table td {
+  color: #000000;
+}
+
+html[data-theme="light"] .admin-staff-person strong,
+html[data-theme="light"] .admin-staff-leader-card strong,
+html[data-theme="light"] .admin-staff-table td > strong {
+  color: #000000;
+}
+
+html[data-theme="light"] .admin-staff-person small,
+html[data-theme="light"] .admin-staff-subtext,
+html[data-theme="light"] .admin-staff-leader-card small,
+html[data-theme="light"] .admin-staff-leader-card em {
+  color: #4B5563;
+}
+
+html[data-theme="light"] .admin-staff-avatar {
+  color: #000000;
+}
+
+html[data-theme="light"] .admin-staff-avatar.green,
+html[data-theme="light"] .admin-staff-badge.green {
+  color: #000000;
+}
+
+html[data-theme="light"] .admin-staff-avatar.blue,
+html[data-theme="light"] .admin-staff-badge.blue {
+  color: #000000;
+}
+
+html[data-theme="light"] .admin-staff-avatar.cyan,
+html[data-theme="light"] .admin-staff-badge.cyan {
+  color: #000000;
+}
+
+html[data-theme="light"] .admin-staff-avatar.purple,
+html[data-theme="light"] .admin-staff-badge.purple {
+  color: #000000;
+}
+
+html[data-theme="light"] .admin-staff-badge.red {
+  color: #000000;
+}
+
+html[data-theme="light"] .admin-staff-badge,
+html[data-theme="light"] .admin-staff-view-btn {
+  color: #000000;
+}
+
+html[data-theme="light"] .admin-staff-leader-card {
+  background: rgba(247, 249, 252, 0.96);
+}
+
+html[data-theme="light"] .admin-staff-breakdown-row {
+  background: rgba(247, 249, 252, 0.96);
+}
+
+html[data-theme="light"] .admin-staff-breakdown-row strong {
+  color: #000000;
+}
+
+html[data-theme="light"] .admin-staff-breakdown-row span {
+  color: #4B5563;
+}
+
+html[data-theme="light"] .admin-staff-branch-cloud button {
+  background: rgba(246, 248, 251, 0.96);
+  color: #000000;
+}
+
+html[data-theme="light"] .admin-staff-branch-cloud button:hover {
+  color: #000000;
+}
+
+html[data-theme="light"] .admin-modal {
+  background: linear-gradient(180deg, rgba(245, 248, 251, 0.98), rgba(246, 248, 251, 0.98));
+  color: #000000;
+}
+
+html[data-theme="light"] .admin-staff-modal-title h2 {
+  color: #000000;
+}
+
+html[data-theme="light"] .admin-staff-readonly-note {
+  color: #000000;
+}
+
+html[data-theme="light"] .admin-staff-info-tile {
+  background: rgba(247, 249, 252, 0.96);
+}
+
+html[data-theme="light"] .admin-staff-info-tile strong {
+  color: #000000;
+}
+
+html[data-theme="light"] .admin-staff-kv-grid {
+  background: rgba(247, 249, 252, 0.96);
+}
+
+html[data-theme="light"] .admin-staff-kv-grid strong {
+  color: #000000;
+}
+
+html[data-theme="light"] .admin-staff-chip-wrap span,
+html[data-theme="light"] .admin-staff-chip-wrap em {
+  color: #000000;
+}
+
+html[data-theme="light"] .admin-staff-insight-section {
+  background: radial-gradient(circle at 100% 0%, rgba(56, 189, 248, 0.08), transparent 38%),
+    rgba(247, 249, 251, 0.96);
+}
+
+html[data-theme="light"] .admin-staff-insight-head h3,
+html[data-theme="light"] .admin-staff-modal-card-head h3 {
+  color: #000000;
+}
+
+html[data-theme="light"] .admin-staff-insight-head p,
+html[data-theme="light"] .admin-staff-modal-card-head p {
+  color: #4B5563;
+}
+
+html[data-theme="light"] .admin-staff-leader-card {
+  background: linear-gradient(135deg, rgba(245, 248, 251, 0.96), rgba(246, 248, 251, 0.96));
+}
+
+html[data-theme="light"] .admin-staff-leader-card:hover,
+html[data-theme="light"] .admin-staff-leader-card:focus-visible {
+  background: linear-gradient(135deg, rgba(244, 247, 250, 0.96), rgba(245, 248, 251, 0.96));
+}
+
+html[data-theme="light"] .admin-staff-leader-card > svg {
+  color: #4B5563;
+}
+
+html[data-theme="light"] .admin-staff-role-card {
+  background: rgba(246, 248, 251, 0.96);
+  color: #000000;
+}
+
+html[data-theme="light"] .admin-staff-role-card:hover,
+html[data-theme="light"] .admin-staff-role-card:focus-visible {
+  background: rgba(244, 247, 250, 0.96);
+}
+
+html[data-theme="light"] .admin-staff-role-card-head strong {
+  color: #000000;
+}
+
+html[data-theme="light"] .admin-staff-role-card small {
+  color: #4B5563;
+}
+
+html[data-theme="light"] .admin-staff-modal {
+  background: radial-gradient(circle at 10% 0%, rgba(14, 116, 144, 0.14), transparent 34%),
+    linear-gradient(180deg, #f5f8fb 0%, #f6f8fb 100%);
+}
+
+html[data-theme="light"] .admin-staff-modal .admin-modal-head {
+  background: rgba(245, 248, 251, 0.98);
+}
+
+html[data-theme="light"] .admin-staff-info-tile {
+  background: rgba(246, 249, 251, 0.96);
+}
+
+html[data-theme="light"] .admin-staff-modal-card {
+  background: rgba(246, 249, 251, 0.96);
+}
+
+html[data-theme="light"] .admin-staff-detail-pair {
+  background: rgba(245, 248, 251, 0.96);
+}
+
+html[data-theme="light"] .admin-staff-detail-pair strong {
+  color: #000000;
+}
+
+html[data-theme="light"] .admin-staff-access-grid > div {
+  background: rgba(245, 248, 251, 0.96);
+}
+
+html[data-theme="light"] .admin-staff-readonly-note strong {
+  color: #000000;
+}
+
+html[data-theme="light"] .admin-branch-badge {
+  color: #000000;
+}
+
+html[data-theme="light"] .admin-branch-badge.blue,
+html[data-theme="light"] .admin-branch-avatar.blue {
+  color: #000000;
+}
+
+html[data-theme="light"] .admin-branch-badge.purple,
+html[data-theme="light"] .admin-branch-avatar.purple {
+  color: #000000;
+}
+
+html[data-theme="light"] .admin-branch-workspace {
+  background: rgba(247, 249, 251, 0.96);
+}
+
+html[data-theme="light"] .admin-branch-rail {
+  background: radial-gradient(circle at 10% 0%, rgba(6, 182, 212, 0.1), transparent 30%),
+    rgba(246, 249, 251, 0.96);
+}
+
+html[data-theme="light"] .admin-branch-rail-head strong {
+  color: #000000;
+}
+
+html[data-theme="light"] .admin-branch-search,
+html[data-theme="light"] .admin-branch-select {
+  background: rgba(247, 249, 252, 0.96);
+}
+
+html[data-theme="light"] .admin-branch-search input,
+html[data-theme="light"] .admin-branch-select select {
+  color: #000000;
+}
+
+html[data-theme="light"] .admin-branch-select select option {
+  background: #f5f8fb;
+  color: #000000;
+}
+
+html[data-theme="light"] .admin-branch-list button {
+  color: #000000;
+}
+
+html[data-theme="light"] .admin-branch-list strong {
+  color: #000000;
+}
+
+html[data-theme="light"] .admin-branch-list small {
+  color: #4B5563;
+}
+
+html[data-theme="light"] .admin-branch-team-hero {
+  background: radial-gradient(circle at 100% 0%, rgba(59, 130, 246, 0.12), transparent 40%),
+    linear-gradient(135deg, rgba(8, 145, 178, 0.1), rgba(245, 248, 251, 0.96));
+}
+
+html[data-theme="light"] .admin-branch-team-copy h2 {
+  color: #000000;
+}
+
+html[data-theme="light"] .admin-branch-team-copy p {
+  color: #4B5563;
+}
+
+html[data-theme="light"] .admin-branch-metrics > div {
+  background: rgba(246, 249, 251, 0.96);
+}
+
+html[data-theme="light"] .admin-branch-metrics span {
+  color: #4B5563;
+}
+
+html[data-theme="light"] .admin-branch-metrics strong {
+  color: #000000;
+}
+
+html[data-theme="light"] .admin-branch-roster-head h3 {
+  color: #000000;
+}
+
+html[data-theme="light"] .admin-branch-roster-head p {
+  color: #4B5563;
+}
+
+html[data-theme="light"] .admin-branch-member {
+  background: radial-gradient(circle at 100% 0%, rgba(59, 130, 246, 0.06), transparent 35%),
+    rgba(246, 249, 251, 0.96);
+}
+
+html[data-theme="light"] .admin-branch-avatar {
+  color: #000000;
+}
+
+html[data-theme="light"] .admin-branch-member-head h4 {
+  color: #000000;
+}
+
+html[data-theme="light"] .admin-branch-member-head p {
+  color: #4B5563;
+}
+
+html[data-theme="light"] .admin-branch-status {
+  border: 3px solid #e2e8f0;
+}
+
+html[data-theme="light"] .admin-branch-member-details span {
+  color: #4B5563;
+}
+
+html[data-theme="light"] .agent-portal .sidebar {
+  background: radial-gradient(circle at 10% 0%, rgba(34, 211, 238, 0.14), transparent 28%),
+    linear-gradient(180deg, rgba(246, 248, 251, 0.98), rgba(247, 249, 251, 0.98)) !important;
+  box-shadow: 0 -18px 45px rgba(0, 0, 0, 0.34), inset 0 1px 0 rgba(226, 232, 240, 0.04) !important;
+}
+
+html[data-theme="light"] .agent-portal .nav-item {
+  color: #4B5563 !important;
+}
+
+html[data-theme="light"] .agent-portal .nav-item:hover {
+  background: rgba(246, 248, 251, 0.96) !important;
+  color: #000000 !important;
+}
+
+html[data-theme="light"] .agent-portal .nav-item.active {
+  background: linear-gradient(135deg, rgba(14, 165, 233, 0.24), rgba(29, 78, 216, 0.18)),
+    rgba(245, 248, 251, 0.96) !important;
+  box-shadow: 0 10px 22px rgba(14, 165, 233, 0.13), inset 0 1px 0 rgba(226, 232, 240, 0.06);
+  color: #000000 !important;
+}
+
+html[data-theme="light"] .csr-dashboard-upgraded .agent-profile-panel,
+html[data-theme="light"] .csr-dashboard-upgraded .agent-panel,
+html[data-theme="light"] .csr-dashboard-upgraded .agent-table-panel,
+html[data-theme="light"] .csr-ticket-scope-panel {
+  background: radial-gradient(circle at 100% 0%, rgba(34, 211, 238, 0.08), transparent 32%),
+    linear-gradient(180deg, rgba(242, 246, 250, 0.96), rgba(245, 248, 251, 0.96)) !important;
+  box-shadow: 0 18px 36px rgba(0, 0, 0, 0.24), inset 0 1px 0 rgba(226, 232, 240, 0.035) !important;
+}
+
+html[data-theme="light"] .csr-section-title-row p,
+html[data-theme="light"] .csr-ticket-number-head p,
+html[data-theme="light"] .csr-ticket-scope-note p {
+  color: #4B5563;
+}
+
+html[data-theme="light"] .csr-soft-refresh {
+  background: rgba(246, 248, 251, 0.96) !important;
+  color: #000000 !important;
+}
+
+html[data-theme="light"] .csr-ticket-number-card {
+  background: linear-gradient(135deg, rgba(246, 248, 251, 0.96), rgba(244, 247, 250, 0.96));
+}
+
+html[data-theme="light"] .csr-ticket-number-head span {
+  color: #4B5563;
+}
+
+html[data-theme="light"] .csr-ticket-number-list span {
+  color: #000000;
+}
+
+html[data-theme="light"] .csr-ticket-number-list em {
+  color: #4B5563;
+}
+
+html[data-theme="light"] .csr-ticket-scope-panel > button {
+  background: rgba(245, 248, 251, 0.96);
+  color: #000000;
+}
+
+html[data-theme="light"] .csr-ticket-scope-note {
+  color: #4B5563;
+}
+
+html[data-theme="light"] .csr-recent-ticket-panel .agent-table-row span:last-child {
+  color: #4B5563;
+}
+
+html[data-theme="light"] .ticket-filter-field > span {
+  color: #000000;
+}
+
+html[data-theme="light"] .branch-dropdown-label {
+  color: #000000;
+}
+
+html[data-theme="light"] .branch-dropdown-toggle {
+  background: linear-gradient(135deg, rgba(18, 191, 232, 0.12), rgba(245, 248, 251, 0.96) 42%, rgba(246, 249, 251, 0.98));
+  box-shadow: inset 0 1px 0 rgba(226, 232, 240, 0.045), 0 12px 28px rgba(0, 0, 0, 0.16);
+  color: #000000;
+}
+
+html[data-theme="light"] .branch-toggle-main b {
+  color: #000000;
+}
+
+html[data-theme="light"] .branch-dropdown-menu-portal {
+  background: radial-gradient(circle at top left, rgba(18, 191, 232, 0.16), transparent 34%),
+    linear-gradient(180deg, rgba(245, 248, 251, 0.98), rgba(247, 249, 252, 0.99));
+  box-shadow: 0 28px 80px rgba(0, 0, 0, 0.58), 0 0 0 1px rgba(226, 232, 240, 0.04) inset;
+  color: #000000;
+}
+
+html[data-theme="light"] .branch-dropdown-menu-head strong {
+  color: #000000;
+}
+
+html[data-theme="light"] .branch-dropdown-menu-head span {
+  color: #4B5563;
+}
+
+html[data-theme="light"] .branch-dropdown-menu-head button {
+  color: #000000;
+}
+
+html[data-theme="light"] .branch-dropdown-menu-head button:hover {
+  color: #000000;
+}
+
+html[data-theme="light"] .branch-search-box input {
+  background: rgba(247, 249, 252, 0.96);
+  color: #000000;
+}
+
+html[data-theme="light"] .branch-menu-actions button,
+html[data-theme="light"] .branch-menu-actions .branch-checkbox-row-all {
+  background: rgba(245, 248, 251, 0.96);
+  color: #000000;
+}
+
+html[data-theme="light"] .branch-menu-actions button:hover,
+html[data-theme="light"] .branch-menu-actions button.active,
+html[data-theme="light"] .branch-menu-actions .branch-checkbox-row-all:hover {
+  color: #000000;
+}
+
+html[data-theme="light"] .branch-selected-preview span {
+  color: #000000;
+}
+
+html[data-theme="light"] .branch-checkbox-list {
+  scrollbar-color: rgba(18, 191, 232, 0.6) rgba(246, 248, 251, 0.96);
+}
+
+html[data-theme="light"] .branch-checkbox-list::-webkit-scrollbar-track {
+  background: rgba(246, 248, 251, 0.96);
+}
+
+html[data-theme="light"] .branch-checkbox-row {
+  background: rgba(246, 249, 251, 0.96);
+  color: #000000;
+}
+
+html[data-theme="light"] .branch-checkbox-row span {
+  color: #000000 !important;
+}
+
+html[data-theme="light"] .branch-dropdown-empty {
+  background: rgba(246, 248, 251, 0.96);
+  color: #4B5563;
+}
+
+html[data-theme="light"] .branch-dropdown-foot {
+  color: #4B5563;
+}
+
+@media (max-width: 900px) {
+html[data-theme="light"] .customer-portal .sidebar,
+html[data-theme="light"] .agent-portal .sidebar {
+  background: rgba(246, 248, 251, 0.96) !important;
+}
+}
+
+/* =========================================================
+   MANUAL LIGHT THEME OVERRIDES
+   Targeted fixes the automated pass intentionally leaves alone
+   (primary CTA buttons keep a vivid dark-mode color by design,
+   but the light theme spec calls for a flat #2563EB / #1D4ED8 pair).
+   ========================================================= */
+html[data-theme="light"] .btn,
+html[data-theme="light"] .btn-primary,
+html[data-theme="light"] .admin-portal .btn-primary,
+html[data-theme="light"] .customer-portal .btn-primary,
+html[data-theme="light"] .btn-login,
+html[data-theme="light"] .btn-register-php,
+html[data-theme="light"] .register-modal footer button {
+  background: #2563EB !important;
+  color: #fff !important;
+}
+
+html[data-theme="light"] .btn:hover:not(:disabled),
+html[data-theme="light"] .btn-primary:hover:not(:disabled),
+html[data-theme="light"] .btn-login:hover:not(:disabled),
+html[data-theme="light"] .btn-register-php:hover:not(:disabled) {
+  background: #1D4ED8 !important;
+}
+
+/* .create-account-btn also carries the generic .btn class, but it's an
+   intentionally white outline button (dark text) in both themes - its own
+   :link/:hover/:focus/:active rules already out-specificity .btn for
+   background, but not for color, so it needs an explicit color pin here. */
+html[data-theme="light"] .create-account-btn,
+html[data-theme="light"] .create-account-btn:link,
+html[data-theme="light"] .create-account-btn:visited,
+html[data-theme="light"] .create-account-btn:hover,
+html[data-theme="light"] .create-account-btn:focus,
+html[data-theme="light"] .create-account-btn:active {
+  color: #000000 !important;
+}
+
+/* Header logo badges wrap a PNG whose artwork is white-on-transparent.
+   Their backgrounds are translucent brand-blue (~18% alpha), which is fine
+   over a dark page but composites to a near-white wash over a light page,
+   making the white logo art disappear. Force an opaque dark backdrop here
+   so the logo reads the same in both themes. */
+html[data-theme="light"] .admin-brand img,
+html[data-theme="light"] .agent-header-left img {
+  background: #0A1A33 !important;
+  border-color: #1D4ED8 !important;
+}
+
+/* Customer "My Requests" filter chips (All/New Request/.../Refresh): an
+   older superseded dark rule (navy bg) generated a light background
+   override, but the winning dark rule's white text had no light
+   counterpart (its vivid cyan bg made the auto-pass leave it alone) -
+   leaving white-on-near-white. Pin both explicitly. */
+html[data-theme="light"] .customer-filter-chips button {
+  background: #F1F5F9 !important;
+  border: 1px solid #E2E8F0 !important;
+  color: #000000 !important;
+}
+
+html[data-theme="light"] .customer-filter-chips button.active {
+  background: #2563EB !important;
+  color: #fff !important;
 }

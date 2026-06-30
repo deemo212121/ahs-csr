@@ -7,6 +7,7 @@ import Link from 'next/link';
 import { FormEvent, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/components/AuthProvider';
+import { ThemeToggle } from '@/components/ThemeToggle';
 
 type ServiceAreaLookup = {
   service_areas?: Array<{
@@ -247,6 +248,7 @@ export default function CustomerRegisterPage() {
 
   return (
     <main className="register-page-shell">
+      <ThemeToggle className="login-theme-toggle" />
       <div className="register-container-php">
         <div className="register-card-php">
           <div className="register-header-php">

@@ -7,6 +7,7 @@ import Link from 'next/link';
 import { FormEvent, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/components/AuthProvider';
+import { ThemeToggle } from '@/components/ThemeToggle';
 import { roleHome } from '@/lib/types';
 import { getDemoRoleForCredentials } from '@/lib/auth/client';
 import { isFirebaseConfigured } from '@/lib/firebase/client';
@@ -108,6 +109,7 @@ export default function LoginPage() {
 
   return (
     <main className="login-screen login-page-shell">
+      <ThemeToggle className="login-theme-toggle" />
       <div className="login-container">
         <div className="login-card login-panel">
           <div className="login-header">

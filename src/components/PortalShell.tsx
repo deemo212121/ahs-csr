@@ -29,6 +29,7 @@ import {
   X,
 } from "lucide-react";
 import { useAuth } from "@/components/AuthProvider";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import type { AppRole } from "@/lib/types";
 
 type NavItem = { href: string; label: string; icon: React.ReactNode };
@@ -533,6 +534,7 @@ export function PortalShell({
                   </div>
                 ) : null}
               </div>
+              <ThemeToggle />
             </div>
           </header>
         ) : (
@@ -670,6 +672,7 @@ export function PortalShell({
                   </button>
                 </>
               )}
+              <ThemeToggle />
             </div>
           </header>
         )}
