@@ -136,6 +136,7 @@ export function AdminShell({
           <b className="admin-title">{title}</b>
         </div>
         <div className="admin-topbar-actions">
+          <ThemeToggle />
           <button
             aria-label="Refresh page"
             className="admin-icon-btn ghost"
@@ -206,7 +207,6 @@ export function AdminShell({
               </div>
             ) : null}
           </div>
-          <ThemeToggle />
         </div>
       </header>
 

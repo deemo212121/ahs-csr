@@ -1,7 +1,17 @@
 'use client';
 
 import { Save, UserRound } from 'lucide-react';
+import { useEffect, useState } from 'react';
 import { useAuth } from '@/components/AuthProvider';
+import { US_STATES } from '@/lib/data/usStates';
+
+type ServiceAreaOption = {
+  id: string;
+  zip_code: string;
+  city: string;
+  state: string;
+  region: string;
+};
 
 function memberSince(value?: string | null) {
   const fallback = new Date();
@@ -17,6 +27,56 @@ function memberSince(value?: string | null) {
 export function CustomerProfilePage() {
   const { profile } = useAuth();
   const fullName = [profile?.first_name, profile?.last_name].filter(Boolean).join(' ') || 'Customer';
+
+  const [city, setCity] = useState(profile?.city || '');
+  const [state, setState] = useState(profile?.state || '');
+  const [region, setRegion] = useState(profile?.region || '');
+  const [zipCode, setZipCode] = useState(profile?.zip_code || '');
+  const [zipMatches, setZipMatches] = useState<ServiceAreaOption[]>([]);
+  const [zipMessage, setZipMessage] = useState<string | null>(null);
+
+  function applyServiceArea(area: ServiceAreaOption) {
+    setCity(area.city);
+    setState(area.state);
+    setRegion(area.region);
+    setZipMessage(`${area.city}, ${area.state} | ${area.region}`);
+  }
+
+  useEffect(() => {
+    const zip = zipCode.replace(/\D/g, '').slice(0, 5);
+    if (zip.length !== 5) {
+      setZipMatches([]);
+      return;
+    }
+
+    let cancelled = false;
+    const timer = window.setTimeout(async () => {
+      try {
+        const response = await fetch(`/api/service-areas?zip=${encodeURIComponent(zip)}&limit=25`);
+        const data = (await response.json()) as { service_areas?: ServiceAreaOption[]; message?: string };
+        if (!response.ok) throw new Error(data.message || 'ZIP lookup failed.');
+        if (cancelled) return;
+
+        const matches = data.service_areas ?? [];
+        setZipMatches(matches);
+        if (matches.length > 0) {
+          applyServiceArea(matches[0]);
+        } else {
+          setZipMessage('This ZIP is not in the active service coverage list yet.');
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setZipMatches([]);
+          setZipMessage(err instanceof Error ? err.message : 'Unable to check ZIP coverage.');
+        }
+      }
+    }, 250);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [zipCode]);
 
   return (
     <div className="customer-page-shell cx-profile-page">
@@ -52,19 +112,47 @@ export function CustomerProfilePage() {
           </label>
           <label>
             <span>City</span>
-            <input defaultValue={profile?.city || ''} />
+            <input onChange={(event) => setCity(event.target.value)} value={city} />
           </label>
           <label>
             <span>State</span>
-            <input defaultValue={profile?.state || ''} />
+            <select onChange={(event) => setState(event.target.value)} value={state}>
+              <option value="">Select State</option>
+              {US_STATES.map((option) => (
+                <option key={option} value={option}>
+                  {option}
+                </option>
+              ))}
+            </select>
           </label>
           <label>
             <span>ZIP Code</span>
-            <input defaultValue={profile?.zip_code || ''} />
+            <input
+              inputMode="numeric"
+              maxLength={5}
+              onChange={(event) => setZipCode(event.target.value.replace(/\D/g, '').slice(0, 5))}
+              value={zipCode}
+            />
+            {zipMessage ? <small>{zipMessage}</small> : null}
+            {zipMatches.length > 1 ? (
+              <select
+                onChange={(event) => {
+                  const area = zipMatches.find((match) => match.id === event.target.value);
+                  if (area) applyServiceArea(area);
+                }}
+                value={zipMatches.find((match) => match.city === city && match.state === state && match.region === region)?.id ?? zipMatches[0]?.id ?? ''}
+              >
+                {zipMatches.map((match) => (
+                  <option key={match.id} value={match.id}>
+                    {match.city}, {match.state} | {match.region}
+                  </option>
+                ))}
+              </select>
+            ) : null}
           </label>
           <label>
             <span>Region</span>
-            <input defaultValue={profile?.region || ''} />
+            <input onChange={(event) => setRegion(event.target.value)} value={region} />
           </label>
         </div>
         <button className="btn btn-primary cx-save-profile" type="button">

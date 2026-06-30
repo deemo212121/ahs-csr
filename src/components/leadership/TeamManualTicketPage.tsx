@@ -4,6 +4,7 @@ import { ClipboardPlus, Save } from 'lucide-react';
 import { FormEvent, useEffect, useState } from 'react';
 import { useAuth } from '@/components/AuthProvider';
 import { fetchJsonWithFirebase } from '@/lib/auth/client';
+import { US_STATES } from '@/lib/data/usStates';
 
 type ManualForm = {
   request_number: string;
@@ -192,7 +193,7 @@ export function TeamManualTicketPage() {
             <div className="field"><label>Region *</label><input required value={form.region} onChange={(event) => update('region', event.target.value)} /></div>
             <div className="field"><label>City *</label><input required value={form.city} onChange={(event) => update('city', event.target.value)} /></div>
             <div className="field"><label>Zip Code *</label><input required value={form.zip_code} onChange={(event) => update('zip_code', event.target.value.replace(/\D/g, '').slice(0, 5))} /></div>
-            <div className="field"><label>State *</label><input required value={form.state} onChange={(event) => update('state', event.target.value)} /></div>
+            <div className="field"><label>State *</label><select required value={form.state} onChange={(event) => update('state', event.target.value)}><option value="">Select State</option>{US_STATES.map((state) => <option key={state} value={state}>{state}</option>)}</select></div>
             {zipMessage ? <div className="manual-zip-message">{zipMessage}</div> : null}
             {zipMatches.length > 1 ? (
               <div className="manual-zip-options">

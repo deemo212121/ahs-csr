@@ -504,6 +504,7 @@ export function PortalShell({
               >
                 <MessageSquare size={16} />
               </Link>
+              <ThemeToggle />
               <div className="agent-popover-anchor">
                 <button
                   className="customer-user-pill"
@@ -534,7 +535,6 @@ export function PortalShell({
                   </div>
                 ) : null}
               </div>
-              <ThemeToggle />
             </div>
           </header>
         ) : (
@@ -560,6 +560,7 @@ export function PortalShell({
               <strong>{title}</strong>
             )}
             <div className="button-row agent-header-actions">
+              <ThemeToggle />
               {isAgentPortal ? (
                 <>
                   <div className="agent-popover-anchor">
@@ -672,7 +673,6 @@ export function PortalShell({
                   </button>
                 </>
               )}
-              <ThemeToggle />
             </div>
           </header>
         )}

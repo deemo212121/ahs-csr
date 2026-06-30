@@ -8,6 +8,7 @@ import { FormEvent, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/components/AuthProvider';
 import { ThemeToggle } from '@/components/ThemeToggle';
+import { US_STATES } from '@/lib/data/usStates';
 
 type ServiceAreaLookup = {
   service_areas?: Array<{
@@ -333,12 +334,18 @@ export default function CustomerRegisterPage() {
             <div className="register-grid two">
               <label>
                 State
-                <input
+                <select
                   className="editable-location"
                   onChange={(event) => setState(event.target.value)}
-                  placeholder="Auto-fills from ZIP, editable"
                   value={state}
-                />
+                >
+                  <option value="">Select State</option>
+                  {US_STATES.map((option) => (
+                    <option key={option} value={option}>
+                      {option}
+                    </option>
+                  ))}
+                </select>
               </label>
               <label>
                 ZIP Code

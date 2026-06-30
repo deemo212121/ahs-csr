@@ -1,9 +1,10 @@
 'use client';
 
-import { Camera, Clock, Package, Send, UploadCloud, UserRound } from 'lucide-react';
+import { Clock, Package, Send, UserRound } from 'lucide-react';
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { fetchJsonWithFirebase } from '@/lib/auth/client';
 import { useAuth } from '@/components/AuthProvider';
+import { US_STATES } from '@/lib/data/usStates';
 
 const brandOptions = [
   'Whirlpool',
@@ -76,7 +77,6 @@ type FormState = typeof initialState;
 export function ServiceRequestForm({ onCreated }: { onCreated?: () => void }) {
   const { user, profile } = useAuth();
   const [form, setForm] = useState<FormState>(initialState);
-  const [selectedImages, setSelectedImages] = useState<File[]>([]);
   const [zipMatches, setZipMatches] = useState<ServiceAreaOption[]>([]);
   const [zipLookupMessage, setZipLookupMessage] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -147,7 +147,6 @@ export function ServiceRequestForm({ onCreated }: { onCreated?: () => void }) {
 
   function resetForm() {
     setForm(initialState);
-    setSelectedImages([]);
   }
 
   async function submit(event: FormEvent) {
@@ -164,7 +163,6 @@ export function ServiceRequestForm({ onCreated }: { onCreated?: () => void }) {
         phone_number: form.phone_number || profile?.phone_number || '',
         ticket_source: 'cx_online',
         source_label: 'CX Submission',
-        image_file_names: selectedImages.map((file) => file.name),
       };
       const data = await fetchJsonWithFirebase<{ request: { request_number: string } }>(
         user,
@@ -268,7 +266,14 @@ export function ServiceRequestForm({ onCreated }: { onCreated?: () => void }) {
           </div>
           <div className="field">
             <label>State *</label>
-            <input onChange={(event) => update('state', event.target.value)} required value={form.state} />
+            <select onChange={(event) => update('state', event.target.value)} required value={form.state}>
+              <option value="">Select State</option>
+              {US_STATES.map((state) => (
+                <option key={state} value={state}>
+                  {state}
+                </option>
+              ))}
+            </select>
           </div>
           <div className="field">
             <label>Region</label>
@@ -433,26 +438,6 @@ export function ServiceRequestForm({ onCreated }: { onCreated?: () => void }) {
             />
           </div>
         </div>
-      </section>
-
-      <section className="request-section">
-        <div className="request-section-title">
-          <Camera size={17} />
-          <strong>Upload Photos</strong>
-          <span>(Optional)</span>
-        </div>
-        <label className="photo-upload">
-          <input
-            accept="image/jpeg,image/png,image/gif,image/webp"
-            multiple
-            onChange={(event) => setSelectedImages(Array.from(event.target.files ?? []))}
-            type="file"
-          />
-          <UploadCloud size={44} />
-          <strong>Click to upload or drag and drop</strong>
-          <span>Supported formats: JPG, PNG, GIF, WEBP (Max 5MB each)</span>
-        </label>
-        <p className="photo-count">{selectedImages.length} images selected</p>
       </section>
 
       <button className="btn btn-primary request-submit" disabled={saving} type="submit">
