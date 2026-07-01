@@ -11,6 +11,7 @@ import {
   ClipboardCheck,
   ClipboardList,
   ClipboardPlus,
+  Copy,
   Gauge,
   Home,
   Headphones,
@@ -20,8 +21,10 @@ import {
   Menu,
   MessageSquare,
   RefreshCw,
+  RotateCcw,
   ShieldCheck,
   Ticket,
+  TrendingUp,
   UserCog,
   UserRound,
   Users,
@@ -38,10 +41,15 @@ import { useNotificationHistory } from "@/lib/notifications/useNotificationHisto
 import { useToastQueue } from "@/lib/notifications/useToastQueue";
 import { playNotificationSound } from "@/lib/notifications/sounds";
 import { dispatchLiveUpdate } from "@/lib/notifications/useLiveUpdate";
+import { usePresenceHeartbeat } from "@/lib/presence/usePresenceHeartbeat";
 import type { NotificationCategory } from "@/lib/notifications/settings";
 import type { AppRole } from "@/lib/types";
 
 type NavItem = { href: string; label: string; icon: React.ReactNode };
+
+function navBasePath(href: string) {
+  return href.split("?")[0];
+}
 
 const navByRole: Record<AppRole, NavItem[]> = {
   customer: [
@@ -151,55 +159,43 @@ const navByRole: Record<AppRole, NavItem[]> = {
 };
 
 const managerDrawerLinks: NavItem[] = [
-  { href: "/manager/dashboard", label: "Overview", icon: <Gauge size={18} /> },
-  { href: "/manager/tickets", label: "Tickets", icon: <Ticket size={18} /> },
   {
-    href: "/manager/verification",
-    label: "Verification Queue",
+    href: "/manager/dashboard?section=personal",
+    label: "Personal Dashboard",
+    icon: <Gauge size={18} />,
+  },
+  {
+    href: "/manager/dashboard?section=team",
+    label: "Team performance",
+    icon: <TrendingUp size={18} />,
+  },
+  {
+    href: "/manager/dashboard?section=management",
+    label: "Team Management",
+    icon: <Users size={18} />,
+  },
+  { href: "/manager/tickets", label: "Request", icon: <ClipboardList size={18} /> },
+  {
+    href: "/manager/verification?section=queue",
+    label: "Verification queue",
     icon: <ShieldCheck size={18} />,
   },
   {
-    href: "/manager/branch-assignment",
-    label: "Branch Assignment",
-    icon: <ClipboardCheck size={18} />,
-  },
-  { href: "/manager/calls", label: "Calls", icon: <Headphones size={18} /> },
-  {
-    href: "/manager/activity-logs",
-    label: "Activity Logs",
-    icon: <ClipboardList size={18} />,
+    href: "/manager/verification?section=related",
+    label: "Related Tickets",
+    icon: <Copy size={18} />,
   },
   {
-    href: "/manager/messages",
-    label: "Messages",
-    icon: <MessageSquare size={18} />,
+    href: "/manager/verification?section=restore",
+    label: "Restore Rejected Tickets",
+    icon: <RotateCcw size={18} />,
   },
   {
     href: "/manager/manual",
     label: "Manual Ticket",
     icon: <ClipboardPlus size={18} />,
   },
-  {
-    href: "/manager/mistake",
-    label: "Mistake",
-    icon: <AlertTriangle size={18} />,
-  },
-  {
-    href: "/manager/warning",
-    label: "Warning",
-    icon: <AlertTriangle size={18} />,
-  },
-  { href: "/manager/report", label: "Report", icon: <BarChart3 size={18} /> },
-  {
-    href: "/manager/announcements",
-    label: "Announcements",
-    icon: <Megaphone size={18} />,
-  },
-  {
-    href: "/manager/change-password",
-    label: "Change Password",
-    icon: <KeyRound size={18} />,
-  },
+  { href: "/manager/calls", label: "Calls", icon: <Headphones size={18} /> },
 ];
 
 const teamLeaderDrawerLinks: NavItem[] = [
@@ -304,6 +300,8 @@ export function PortalShell({
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const nav = role ? navByRole[role] : [];
   const isCustomerPortal = role === "customer";
+
+  usePresenceHeartbeat(user, isCustomerPortal);
   const isAgentPortal =
     role === "csr" || role === "team_leader" || role === "csr_manager";
 
@@ -468,11 +466,12 @@ export function PortalShell({
               {drawerLinks.map((item) => {
                 const badge = badgeFor(item.href);
                 const pulse = pulseFor(item.href);
+                const basePath = navBasePath(item.href);
                 return (
                   <Link
                     className={
-                      pathname === item.href ||
-                      pathname.startsWith(`${item.href}/`)
+                      pathname === basePath ||
+                      pathname.startsWith(`${basePath}/`)
                         ? "active"
                         : ""
                     }

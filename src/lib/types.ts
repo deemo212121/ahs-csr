@@ -27,6 +27,7 @@ export type AppProfile = {
   created_at?: string | null;
   branch_access?: string | null;
   preferences?: { filterRegions?: string[] } | null;
+  last_seen_at?: string | null;
 };
 
 export type ErTicketViewFields = {

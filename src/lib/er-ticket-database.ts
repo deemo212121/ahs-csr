@@ -32,7 +32,7 @@ export type CreatePortalRequestInput = {
 };
 
 export type ReviewPortalRequestInput = {
-  action: 'approve' | 'reject';
+  action: 'approve' | 'reject' | 'restore';
   reject_reason?: string;
   notes?: string;
 };
@@ -1140,20 +1140,32 @@ export async function reviewErModePortalRequest(
         verification_notes: body.notes || 'Request verified and approved for ER ticket posting.',
         last_synced_at: null,
       }
-    : {
-        verification_status: 'rejected',
-        verification_reviewed_by: context.profile.id,
-        verification_reviewed_at: now,
-        verification_reject_reason: body.reject_reason,
-        verification_notes: body.notes || null,
-        is_fake_ticket: true,
-      };
+    : body.action === 'restore'
+      ? {
+          verification_status: 'pending',
+          verification_reviewed_by: context.profile.id,
+          verification_reviewed_at: now,
+          // verification_reject_reason is intentionally left untouched so the
+          // original rejection stays on record even after the ticket is restored.
+          verification_notes: body.notes || `[RESTORED] Restored to pending on ${now} for re-review. Original rejection reason retained.`,
+          is_fake_ticket: false,
+        }
+      : {
+          verification_status: 'rejected',
+          verification_reviewed_by: context.profile.id,
+          verification_reviewed_at: now,
+          verification_reject_reason: body.reject_reason,
+          verification_notes: body.notes || null,
+          is_fake_ticket: true,
+        };
+
+  const expectedCurrentStatus = body.action === 'restore' ? 'rejected' : 'pending';
 
   const { data, error } = await erSupabase
     .from(getPortalRequestsTable())
     .update(update)
     .eq('id', requestId)
-    .eq('verification_status', 'pending')
+    .eq('verification_status', expectedCurrentStatus)
     .select(portalRequestColumns)
     .single();
 

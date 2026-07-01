@@ -114,7 +114,9 @@ export async function GET(
 ) {
   try {
     const auth = await getAuthContext(request);
-    requireRole(auth, ['customer', 'csr', 'team_leader', 'csr_manager', 'admin']);
+    // Only CSR Managers (and admins) can play back call recordings.
+    // CSR agents and team leaders can see call history but not the audio.
+    requireRole(auth, ['customer', 'csr_manager', 'admin']);
 
     const { id } = await context.params;
     const supabaseAdmin = getSupabaseAdmin();

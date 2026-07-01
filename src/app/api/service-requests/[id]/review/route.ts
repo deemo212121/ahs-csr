@@ -8,7 +8,7 @@ import { reviewErModePortalRequest, useErTicketDatabase } from '@/lib/er-ticket-
 import { ensureErPortalRequestMessageThread, ensureErPortalRequestStaffThread, ensureTicketMessageThread } from '@/lib/messages';
 
 const reviewSchema = z.object({
-  action: z.enum(['approve', 'reject']),
+  action: z.enum(['approve', 'reject', 'restore']),
   reject_reason: z.string().optional(),
   notes: z.string().optional(),
 });
@@ -56,20 +56,32 @@ export async function POST(
             verification_notes: body.notes || 'Request verified and approved.',
             is_fake_ticket: false,
           }
-        : {
-            verification_status: 'rejected',
-            verification_reviewed_by: reviewerProfileId,
-            verification_reviewed_at: new Date().toISOString(),
-            verification_reject_reason: body.reject_reason,
-            verification_notes: body.notes || null,
-            is_fake_ticket: true,
-          };
+        : body.action === 'restore'
+          ? {
+              verification_status: 'pending',
+              verification_reviewed_by: reviewerProfileId,
+              verification_reviewed_at: new Date().toISOString(),
+              // verification_reject_reason is intentionally left untouched so the
+              // original rejection stays on record even after the ticket is restored.
+              verification_notes: body.notes || `[RESTORED] Restored to pending on ${new Date().toISOString()} for re-review. Original rejection reason retained.`,
+              is_fake_ticket: false,
+            }
+          : {
+              verification_status: 'rejected',
+              verification_reviewed_by: reviewerProfileId,
+              verification_reviewed_at: new Date().toISOString(),
+              verification_reject_reason: body.reject_reason,
+              verification_notes: body.notes || null,
+              is_fake_ticket: true,
+            };
+
+    const expectedCurrentStatus = body.action === 'restore' ? 'rejected' : 'pending';
 
     const { data, error } = await supabaseAdmin
       .from('service_requests')
       .update(update)
       .eq('id', id)
-      .eq('verification_status', 'pending')
+      .eq('verification_status', expectedCurrentStatus)
       .select('id, request_number, verification_status, sync_status, er_ticket_id, sync_error, last_synced_at')
       .single();
 
@@ -81,7 +93,9 @@ export async function POST(
       notes:
         body.action === 'approve'
           ? 'Request verified and approved.'
-          : `Request rejected. Reason: ${body.reject_reason}`,
+          : body.action === 'restore'
+            ? 'Request restored from rejected to pending.'
+            : `Request rejected. Reason: ${body.reject_reason}`,
     });
 
     const syncResult = body.action === 'approve'

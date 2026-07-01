@@ -17,14 +17,14 @@ import { fetchJsonWithFirebase, type AuthTokenUser } from '@/lib/auth/client';
 import type { RtcCall, RtcCallListResponse } from '@/lib/calls/types';
 import type { ServiceRequest } from '@/lib/types';
 
-function getLastLogin(user: AuthTokenUser | null): string | null {
+export function getLastLogin(user: AuthTokenUser | null): string | null {
   if (!user) return null;
   if ('metadata' in user && user.metadata?.lastSignInTime) return user.metadata.lastSignInTime;
   if ('supabaseUser' in user && user.supabaseUser?.last_sign_in_at) return user.supabaseUser.last_sign_in_at;
   return null;
 }
 
-function EmptyRow({ label }: { label: string }) {
+export function EmptyRow({ label }: { label: string }) {
   return (
     <div className="agent-empty-row">
       <span>{label}</span>
@@ -32,22 +32,43 @@ function EmptyRow({ label }: { label: string }) {
   );
 }
 
-function ticketNo(request: ServiceRequest) {
+export function ticketNo(request: ServiceRequest) {
   return request.er_ticket?.ticket_no || request.request_number || '—';
 }
 
-function reviewedAt(request: ServiceRequest) {
+export function reviewedAt(request: ServiceRequest) {
   return request.updated_at || request.requested_at;
 }
 
-function formatDateTime(value?: string | null) {
+export function isRestored(request: ServiceRequest) {
+  return request.verification_status === 'pending' && !!request.verification_notes?.startsWith('[RESTORED]');
+}
+
+export type TicketDisplayStatus = 'approved' | 'rejected' | 'restored';
+
+export function ticketDisplayStatus(request: ServiceRequest): TicketDisplayStatus {
+  if (isRestored(request)) return 'restored';
+  return request.verification_status === 'approved' ? 'approved' : 'rejected';
+}
+
+export function ticketNoteText(request: ServiceRequest, displayStatus: TicketDisplayStatus) {
+  if (displayStatus === 'restored') {
+    return request.verification_reject_reason
+      ? `Restored — original reject reason: ${request.verification_reject_reason}`
+      : 'Restored to pending for re-review.';
+  }
+  if (displayStatus === 'rejected') return request.verification_reject_reason || '—';
+  return request.verification_notes || '—';
+}
+
+export function formatDateTime(value?: string | null) {
   if (!value) return '—';
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) return value;
   return parsed.toLocaleString();
 }
 
-function isToday(value?: string | null) {
+export function isToday(value?: string | null) {
   if (!value) return false;
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) return false;
@@ -55,14 +76,15 @@ function isToday(value?: string | null) {
   return parsed.getFullYear() === now.getFullYear() && parsed.getMonth() === now.getMonth() && parsed.getDate() === now.getDate();
 }
 
-function formatCallDuration(seconds?: number | null) {
+export function formatCallDuration(seconds?: number | null) {
   if (!seconds) return '—';
   const minutes = Math.floor(seconds / 60);
   const rest = seconds % 60;
   return `${minutes}m ${rest}s`;
 }
 
-function TicketSummaryModal({ request, onClose }: { request: ServiceRequest; onClose: () => void }) {
+export function TicketSummaryModal({ request, onClose }: { request: ServiceRequest; onClose: () => void }) {
+  const displayStatus = ticketDisplayStatus(request);
   return (
     <div className="csr-summary-backdrop" role="presentation" onClick={onClose}>
       <section className="csr-summary-modal" role="dialog" aria-modal="true" onClick={(event) => event.stopPropagation()}>
@@ -76,7 +98,7 @@ function TicketSummaryModal({ request, onClose }: { request: ServiceRequest; onC
         </header>
         <div className="csr-summary-grid">
           <div><span>Date Reviewed</span><strong>{formatDateTime(reviewedAt(request))}</strong></div>
-          <div><span>Status</span><strong className={`agent-pill ${request.verification_status === 'approved' ? 'approved' : 'rejected'}`}>{request.verification_status}</strong></div>
+          <div><span>Status</span><strong className={`agent-pill ${displayStatus}`}>{displayStatus}</strong></div>
           <div><span>Branch / Region</span><strong>{request.region || '—'}</strong></div>
           <div><span>Phone</span><strong>{request.phone_number || '—'}</strong></div>
           <div><span>Email</span><strong>{request.customer_email || '—'}</strong></div>
@@ -84,14 +106,14 @@ function TicketSummaryModal({ request, onClose }: { request: ServiceRequest; onC
         </div>
         <div className="csr-summary-notes">
           <h3>Notes</h3>
-          <p>{request.verification_status === 'rejected' ? request.verification_reject_reason || 'No reason recorded.' : request.verification_notes || 'No notes recorded.'}</p>
+          <p>{ticketNoteText(request, displayStatus)}</p>
         </div>
       </section>
     </div>
   );
 }
 
-function CallSummaryModal({
+export function CallSummaryModal({
   call,
   user,
   onClose,
@@ -184,8 +206,15 @@ function branchChips(value?: string | null) {
   return branches.length ? branches : ['ER profile branch filter'];
 }
 
+const positionLabels: Record<string, string> = {
+  csr: 'CSR Agent',
+  team_leader: 'Team Leader',
+  csr_manager: 'CSR Manager',
+  admin: 'Admin',
+};
+
 export function CsrDashboard() {
-  const { profile, user } = useAuth();
+  const { profile, user, role } = useAuth();
   const { requests, loading, error } = useLeadershipRequests(500);
 
   const [calls, setCalls] = useState<RtcCall[]>([]);
@@ -193,6 +222,7 @@ export function CsrDashboard() {
   const [callsError, setCallsError] = useState<string | null>(null);
   const [selectedTicket, setSelectedTicket] = useState<ServiceRequest | null>(null);
   const [selectedCall, setSelectedCall] = useState<RtcCall | null>(null);
+  const [ticketStatusFilter, setTicketStatusFilter] = useState<'all' | TicketDisplayStatus>('all');
 
   useEffect(() => {
     if (!user) return;
@@ -224,10 +254,18 @@ export function CsrDashboard() {
         .filter(
           (request) =>
             request.verification_reviewed_by === profile?.id &&
-            (request.verification_status === 'approved' || request.verification_status === 'rejected'),
+            (request.verification_status === 'approved' || request.verification_status === 'rejected' || isRestored(request)),
         )
         .sort((a, b) => new Date(reviewedAt(b) || 0).getTime() - new Date(reviewedAt(a) || 0).getTime()),
     [requests, profile?.id],
+  );
+
+  const filteredVerifiedTickets = useMemo(
+    () =>
+      ticketStatusFilter === 'all'
+        ? myVerifiedTickets
+        : myVerifiedTickets.filter((request) => ticketDisplayStatus(request) === ticketStatusFilter),
+    [myVerifiedTickets, ticketStatusFilter],
   );
 
   const myDisplayName = [profile?.first_name, profile?.last_name].filter(Boolean).join(' ') || profile?.email || '';
@@ -260,7 +298,7 @@ export function CsrDashboard() {
           <div className="agent-info-card">
             <UserSquare2 size={18} />
             <span>Position</span>
-            <strong>CSR Agent</strong>
+            <strong>{(role && positionLabels[role]) || 'CSR Agent'}</strong>
           </div>
           <div className="agent-info-card">
             <Mail size={18} />
@@ -305,10 +343,24 @@ export function CsrDashboard() {
 
       <section className="agent-dashboard-grid csr-dashboard-grid-redesigned">
         <div className="agent-table-panel csr-verified-panel">
-          <h2>
-            <ClipboardList size={16} />
-            Number of Verified Tickets
-          </h2>
+          <div className="csr-verified-panel-head">
+            <h2>
+              <ClipboardList size={16} />
+              Number of Verified Tickets
+            </h2>
+            <div className="csr-status-filter">
+              {(['all', 'approved', 'rejected', 'restored'] as const).map((option) => (
+                <button
+                  className={`csr-status-filter-btn ${ticketStatusFilter === option ? 'active' : ''}`}
+                  key={option}
+                  onClick={() => setTicketStatusFilter(option)}
+                  type="button"
+                >
+                  {option === 'all' ? 'All' : option.charAt(0).toUpperCase() + option.slice(1)}
+                </button>
+              ))}
+            </div>
+          </div>
           <div className="agent-table-head six">
             <span>Date</span>
             <span>Ticket #</span>
@@ -317,25 +369,28 @@ export function CsrDashboard() {
             <span>Status</span>
             <span>Notes</span>
           </div>
-          {myVerifiedTickets.length ? (
+          {filteredVerifiedTickets.length ? (
             <div className="agent-table-body">
-              {myVerifiedTickets.map((request) => (
-                <button
-                  className="agent-table-row six csr-clickable-row"
-                  key={request.id}
-                  onClick={() => setSelectedTicket(request)}
-                  type="button"
-                >
-                  <span>{formatDateTime(reviewedAt(request))}</span>
-                  <strong>{ticketNo(request)}</strong>
-                  <span>{request.full_name || '—'}</span>
-                  <span>{request.region || '—'}</span>
-                  <span className={`agent-pill ${request.verification_status === 'approved' ? 'approved' : 'rejected'}`}>
-                    {request.verification_status}
-                  </span>
-                  <span>{request.verification_status === 'rejected' ? request.verification_reject_reason || '—' : request.verification_notes || '—'}</span>
-                </button>
-              ))}
+              {filteredVerifiedTickets.map((request) => {
+                const displayStatus = ticketDisplayStatus(request);
+                return (
+                  <button
+                    className="agent-table-row six csr-clickable-row"
+                    key={request.id}
+                    onClick={() => setSelectedTicket(request)}
+                    type="button"
+                  >
+                    <span>{formatDateTime(reviewedAt(request))}</span>
+                    <strong>{ticketNo(request)}</strong>
+                    <span>{request.full_name || '—'}</span>
+                    <span>{request.region || '—'}</span>
+                    <span className={`agent-pill ${displayStatus}`}>
+                      {displayStatus}
+                    </span>
+                    <span>{ticketNoteText(request, displayStatus)}</span>
+                  </button>
+                );
+              })}
             </div>
           ) : (
             <EmptyRow label="No verified ticket activity found for this CSR yet." />

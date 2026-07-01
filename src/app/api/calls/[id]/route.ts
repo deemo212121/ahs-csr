@@ -88,6 +88,11 @@ export async function PATCH(
       if (['completed', 'cancelled', 'missed'].includes(text(call.status))) {
         throw new Error('This call is no longer active.');
       }
+      // Guard against two CSRs accepting the same call at nearly the same time —
+      // once someone has claimed it, everyone else gets a clear "who has it" message.
+      if (call.status === 'accepted' && call.accepted_by_profile_id !== staffProfileKey(auth)) {
+        throw new Error(`${text(call.accepted_by_name) || 'Another CSR'} is handling this call.`);
+      }
       await supabaseAdmin
         .from('rtc_signals')
         .delete()
@@ -154,7 +159,9 @@ export async function PATCH(
 
     if (error) throw new Error(error.message);
 
-    if (body.action === 'accept') await pingChannel(NOTIFY_CHANNELS.calls);
+    if (body.action === 'accept' || body.action === 'end' || body.action === 'cancel') {
+      await pingChannel(NOTIFY_CHANNELS.calls);
+    }
     return NextResponse.json({ call: data });
   } catch (error) {
     const setupMessage = missingCallSchemaMessage(error);

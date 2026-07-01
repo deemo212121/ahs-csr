@@ -76,6 +76,10 @@ function text(value: unknown) {
   return typeof value === 'string' && value.trim() ? value.trim() : '';
 }
 
+function staffProfileKey(context: { profileSource: string; profile: { id: string } }) {
+  return `${context.profileSource}:${context.profile.id}`;
+}
+
 function nullableText(value: unknown) {
   const clean = text(value);
   return clean || null;
@@ -263,6 +267,20 @@ export async function GET(request: NextRequest) {
       query = query.eq('status', status);
     } else if (!history) {
       query = query.in('status', openCallStatuses);
+    }
+
+    // Call history access is scoped by role: CSR agents only see their own
+    // answered calls, team leaders see their own plus their team's (branch_access)
+    // calls, and CSR managers/admins see everything. The live open-call queue
+    // (history=false) stays shared across all staff so anyone can answer.
+    if (history && context.role === 'csr') {
+      query = query.eq('accepted_by_profile_id', staffProfileKey(context));
+    } else if (history && context.role === 'team_leader') {
+      const branches = (context.profile.branch_access ?? '')
+        .split('|')
+        .map((branch) => branch.trim())
+        .filter(Boolean);
+      if (branches.length) query = query.in('branch', branches);
     }
 
     const { data, error } = await query;

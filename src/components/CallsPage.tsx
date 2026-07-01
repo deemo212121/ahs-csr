@@ -27,6 +27,7 @@ import { useLiveUpdate } from '@/lib/notifications/useLiveUpdate';
 import { BRANCHES } from '@/lib/branches';
 import { BranchCheckboxDropdown } from '@/components/BranchCheckboxDropdown';
 import { useBranchFilter } from '@/lib/useBranchFilter';
+import { isPresenceOnline, usePresenceMap } from '@/lib/presence/usePresenceMap';
 
 const statusOptions: Array<{ value: 'open' | RtcCallStatus | 'history'; label: string }> = [
   { value: 'open', label: 'Open calls' },
@@ -270,15 +271,18 @@ function formatCallDuration(seconds?: number | null) {
 function CallDetailsModal({
   call,
   onClose,
+  canAccessRecordings,
 }: {
   call: RtcCall;
   onClose: () => void;
+  canAccessRecordings: boolean;
 }) {
   const { user } = useAuth();
   const [recordingUrl, setRecordingUrl] = useState<string | null>(null);
   const [recordingMessage, setRecordingMessage] = useState('Loading recording...');
 
   useEffect(() => {
+    if (!canAccessRecordings) return;
     let cancelled = false;
     async function loadRecording() {
       if (!user) return;
@@ -301,7 +305,7 @@ function CallDetailsModal({
     return () => {
       cancelled = true;
     };
-  }, [call.id, user]);
+  }, [call.id, user, canAccessRecordings]);
 
   return (
     <div className="call-manual-backdrop" role="presentation" onClick={onClose}>
@@ -331,10 +335,10 @@ function CallDetailsModal({
             <FileAudio size={22} />
             <div>
               <strong>Recorded Audio</strong>
-              <p>{recordingMessage}</p>
+              <p>{canAccessRecordings ? recordingMessage : 'Recording access is restricted to CSR Managers.'}</p>
             </div>
           </div>
-          {recordingUrl ? <audio controls src={recordingUrl} /> : null}
+          {canAccessRecordings && recordingUrl ? <audio controls src={recordingUrl} /> : null}
         </section>
 
         <section className="call-details-notes">
@@ -416,7 +420,7 @@ export function CallsPage() {
   useLiveUpdate('calls', () => { void loadCalls(true); });
 
   useEffect(() => {
-    const timer = window.setInterval(() => void loadCalls(true), activeCall ? 15000 : 8000);
+    const timer = window.setInterval(() => void loadCalls(true), activeCall ? 10000 : 3000);
     return () => window.clearInterval(timer);
   }, [activeCall?.id, loadCalls]);
 
@@ -424,14 +428,6 @@ export function CallsPage() {
     const timer = window.setInterval(() => void loadCallHistory(true), activeCall ? 30000 : 15000);
     return () => window.clearInterval(timer);
   }, [activeCall?.id, loadCallHistory]);
-
-  const metrics = useMemo(() => {
-    const waiting = calls.filter((call) => call.status === 'manager_queue').length;
-    const accepted = calls.filter((call) => call.status === 'accepted').length;
-    const completed = historyCalls.filter((call) => call.status === 'completed').length;
-    const branchesInQueue = new Set(calls.map((call) => call.branch).filter(Boolean)).size;
-    return { waiting, accepted, completed, branchesInQueue };
-  }, [calls, historyCalls]);
 
   const historyMetrics = useMemo(() => {
     const total = historyCalls.length;
@@ -462,6 +458,23 @@ export function CallsPage() {
         .includes(query);
     });
   }, [calls, search, selectedBranches]);
+
+  const callCustomerIds = useMemo(
+    () => [...calls, ...historyCalls].map((call) => call.customer_id).filter((id): id is string => !!id),
+    [calls, historyCalls],
+  );
+  const callPresenceMap = usePresenceMap(user, callCustomerIds);
+
+  const prioritizedCalls = useMemo(
+    () =>
+      [...filteredCalls].sort((a, b) => {
+        const aOnline = a.customer_id ? isPresenceOnline(callPresenceMap[a.customer_id]) : false;
+        const bOnline = b.customer_id ? isPresenceOnline(callPresenceMap[b.customer_id]) : false;
+        if (aOnline === bOnline) return 0;
+        return aOnline ? -1 : 1;
+      }),
+    [filteredCalls, callPresenceMap],
+  );
 
   const filteredHistoryCalls = useMemo(() => {
     const nameQuery = historyNameFilter.trim().toLowerCase();
@@ -524,13 +537,6 @@ export function CallsPage() {
         </div>
       </section>
 
-      <section className="call-metric-grid">
-        <div><span>Waiting</span><strong>{metrics.waiting}</strong><small>Customer requested</small></div>
-        <div><span>In Rooms</span><strong>{metrics.accepted}</strong><small>WebRTC active</small></div>
-        <div><span>Completed</span><strong>{metrics.completed}</strong><small>Recent history</small></div>
-        <div><span>Branches</span><strong>{metrics.branchesInQueue}</strong><small>In current queue</small></div>
-      </section>
-
       {error ? <div className="call-room-alert">{error}</div> : null}
 
       <section className="call-workspace-grid">
@@ -563,12 +569,18 @@ export function CallsPage() {
                 <p>New customer web calls will appear here automatically.</p>
               </div>
             ) : null}
-            {filteredCalls.map((call) => (
+            {prioritizedCalls.map((call) => (
               <article className={`call-request-card ${activeCall?.id === call.id ? 'active' : ''}`} key={call.id}>
                 <div className="call-card-main">
                   <span className={`call-status-dot ${call.status}`} />
                   <div>
-                    <strong>{call.customer_name}</strong>
+                    <strong>
+                      <span
+                        className={`verification-presence-dot ${call.customer_id && isPresenceOnline(callPresenceMap[call.customer_id]) ? 'online' : 'offline'}`}
+                        title={call.customer_id && isPresenceOnline(callPresenceMap[call.customer_id]) ? 'Customer is online' : 'Customer is offline'}
+                      />
+                      {call.customer_name}
+                    </strong>
                     <small>{call.request_number || 'No linked request'} • {timeAgo(call.queued_at)}</small>
                   </div>
                 </div>
@@ -708,7 +720,13 @@ export function CallsPage() {
             <button className="call-history-row" key={call.id} onClick={() => setDetailCall(call)} type="button">
               <span className={`call-status-dot ${call.status}`} />
               <div>
-                <strong>{call.customer_name}</strong>
+                <strong>
+                  <span
+                    className={`verification-presence-dot ${call.customer_id && isPresenceOnline(callPresenceMap[call.customer_id]) ? 'online' : 'offline'}`}
+                    title={call.customer_id && isPresenceOnline(callPresenceMap[call.customer_id]) ? 'Customer is online' : 'Customer is offline'}
+                  />
+                  {call.customer_name}
+                </strong>
                 <small>{formatDateTime(call.queued_at)} • {call.branch || 'Unassigned'} • {statusLabel(call.status)}</small>
               </div>
               <span>{call.accepted_by_name || 'No staff yet'}</span>
@@ -723,7 +741,13 @@ export function CallsPage() {
       </section>
 
       {manualOpen ? <QuickManualTicketPanel call={activeCall} onClose={() => setManualOpen(false)} /> : null}
-      {detailCall ? <CallDetailsModal call={detailCall} onClose={() => setDetailCall(null)} /> : null}
+      {detailCall ? (
+        <CallDetailsModal
+          call={detailCall}
+          canAccessRecordings={role === 'csr_manager' || role === 'admin'}
+          onClose={() => setDetailCall(null)}
+        />
+      ) : null}
     </div>
   );
 }
