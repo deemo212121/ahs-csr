@@ -25,6 +25,7 @@ export type AppProfile = {
   zip_code?: string | null;
   is_active: boolean;
   created_at?: string | null;
+  branch_access?: string | null;
 };
 
 export type ErTicketViewFields = {

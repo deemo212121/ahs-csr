@@ -303,7 +303,7 @@ function mapErTicketToThreadInsert(ticket: ErTicketRow, customer: ErCustomerRow 
     customer_phone: customerPhone,
     customer_email: customerEmail,
     service_address: serviceAddress,
-    service_city: cleanString(customer?.city),
+    service_city: cleanString(ticket.location) || cleanString(customer?.city),
     service_state: cleanString(customer?.state),
     service_zip: cleanString(customer?.zip),
     manufacturer: cleanString(ticket.manufacturer),
@@ -624,6 +624,77 @@ export async function ensureErPortalRequestMessageThread(
   return thread;
 }
 
+// Creates the shared CSR/TL staff thread for a just-approved portal request.
+// Separate from the customer thread — staff see this one, filtered by service_city / branch.
+export async function ensureErPortalRequestStaffThread(
+  supabaseAdmin: SupabaseClient,
+  request: ServiceRequest,
+): Promise<TicketMessageThread | null> {
+  if (request.verification_status !== 'approved') return null;
+
+  const erTicketId = request.er_ticket_id || null;
+  if (!erTicketId) return null;
+
+  const { data: existing, error: existingError } = await supabaseAdmin
+    .from('ticket_message_threads')
+    .select(threadSelect)
+    .eq('er_ticket_id', erTicketId)
+    .eq('source_system', 'er_ticket_board')
+    .maybeSingle();
+
+  if (existingError) throw new Error(existingError.message);
+  if (existing) return existing as unknown as TicketMessageThread;
+
+  const ticketNo = request.request_number;
+  const product = request.manual_appliance_type || 'Service Request';
+  const now = new Date().toISOString();
+
+  const { data: created, error: createError } = await supabaseAdmin
+    .from('ticket_message_threads')
+    .insert({
+      request_id: null,
+      customer_id: null,
+      request_number: ticketNo,
+      er_ticket_id: erTicketId,
+      er_ticket_no: ticketNo,
+      source_system: 'er_ticket_board',
+      customer_name: request.full_name,
+      customer_phone: request.phone_number,
+      customer_email: request.customer_email,
+      service_address: request.service_address || null,
+      service_city: request.city,
+      service_state: request.state,
+      service_zip: request.zip_code,
+      manufacturer: request.manual_brand,
+      product_type: request.manual_appliance_type,
+      model_number: request.model_number,
+      serial_number: request.serial_number,
+      schedule_date: request.preferred_date,
+      ticket_status: 'approved',
+      subject: `${ticketNo} • ${product}`,
+      status: 'open',
+      last_message_at: now,
+    })
+    .select(threadSelect)
+    .single();
+
+  if (createError) return null;
+
+  const thread = created as unknown as TicketMessageThread;
+  await supabaseAdmin.from('ticket_messages').insert({
+    thread_id: thread.id,
+    request_id: null,
+    sender_profile_id: null,
+    sender_role: null,
+    sender_name: 'USHS Support',
+    message_body: `Conversation opened for ER ticket ${ticketNo}. Use this thread for schedule updates, address changes, appliance details, or any questions about this ticket.`,
+    message_type: 'system',
+    is_internal: false,
+  });
+
+  return thread;
+}
+
 export async function ensureApprovedTicketThreads(
   supabaseAdmin: SupabaseClient,
   auth: AuthContext,
@@ -763,10 +834,7 @@ async function ensureErTicketThreads(
   }
 
   const localProfiles = auth.role === 'customer' ? [] : await getLocalCustomerProfiles(supabaseAdmin);
-  const localProfileIds = new Set(localProfiles.map((profile) => profile.id));
-  const ticketIds = ticketRows
-    .map((ticket) => text(ticket.id))
-    .filter(Boolean);
+  const ticketIds = ticketRows.map((ticket) => text(ticket.id)).filter(Boolean);
   const auditRowsByTicketId = new Map<string, ErTicketAuditRow[]>();
 
   if (ticketIds.length) {
@@ -793,6 +861,23 @@ async function ensureErTicketThreads(
     }
   }
 
+  // BATCH: single query for all existing staff threads (replaces one query per ticket)
+  const { data: existingThreadsData } = await supabaseAdmin
+    .from('ticket_message_threads')
+    .select(threadSelect)
+    .in('er_ticket_id', ticketIds)
+    .eq('source_system', 'er_ticket_board');
+
+  const existingByErTicketId = new Map<string, TicketMessageThread>(
+    ((existingThreadsData ?? []) as unknown as TicketMessageThread[])
+      .filter((t) => t.er_ticket_id)
+      .map((t) => [t.er_ticket_id!, t]),
+  );
+
+  // Separate into existing vs. new
+  const newInserts: ReturnType<typeof mapErTicketToThreadInsert>[] = [];
+  const existingThreadsToProcess: Array<{ erTicketId: string; thread: TicketMessageThread }> = [];
+
   for (const ticket of ticketRows) {
     const erTicketId = text(ticket.id);
     if (!erTicketId) continue;
@@ -803,49 +888,151 @@ async function ensureErTicketThreads(
       ? auth.profile.id
       : findMatchingLocalCustomer(localProfiles, erCustomer);
 
-    const { data: existing, error: existingError } = await supabaseAdmin
-      .from('ticket_message_threads')
-      .select(threadSelect)
-      .eq('er_ticket_id', erTicketId)
-      .maybeSingle();
-
-    if (existingError) continue;
-
+    const existing = existingByErTicketId.get(erTicketId);
     if (existing) {
-      const existingThread = existing as unknown as TicketMessageThread;
-      const needsCustomerLink = localCustomerId && existingThread.customer_id !== localCustomerId;
-      const existingCustomerStillValid = existingThread.customer_id ? localProfileIds.has(existingThread.customer_id) || existingThread.customer_id === auth.profile.id : true;
-      if (needsCustomerLink || !existingCustomerStillValid) {
+      existingThreadsToProcess.push({ erTicketId, thread: existing });
+    } else {
+      newInserts.push(mapErTicketToThreadInsert(ticket, erCustomer, localCustomerId));
+    }
+  }
+
+  // BATCH: insert all new threads at once
+  let newThreads: TicketMessageThread[] = [];
+  if (newInserts.length) {
+    const { data: created } = await supabaseAdmin
+      .from('ticket_message_threads')
+      .insert(newInserts)
+      .select(threadSelect);
+    newThreads = (created ?? []) as unknown as TicketMessageThread[];
+  }
+
+  const allThreads = [
+    ...existingThreadsToProcess.map((e) => e.thread),
+    ...newThreads,
+  ];
+  const allThreadIds = allThreads.map((t) => t.id).filter(Boolean);
+  if (!allThreadIds.length) return;
+
+  // BATCH: check which threads already have at least one message
+  const { data: threadIdsWithMsg } = await supabaseAdmin
+    .from('ticket_messages')
+    .select('thread_id')
+    .in('thread_id', allThreadIds);
+  const threadIdsWithMessages = new Set(
+    ((threadIdsWithMsg ?? []) as Array<{ thread_id: string }>).map((m) => m.thread_id),
+  );
+
+  // BATCH: insert initial welcome messages for threads that have none
+  const initialMessages = allThreads
+    .filter((t) => !threadIdsWithMessages.has(t.id))
+    .map((t) => ({
+      thread_id: t.id,
+      request_id: null,
+      sender_profile_id: null,
+      sender_role: null,
+      sender_name: 'USHS Support',
+      message_body: erThreadMessage(t),
+      message_type: 'system',
+      is_internal: false,
+    }));
+
+  if (initialMessages.length) {
+    await supabaseAdmin.from('ticket_messages').insert(initialMessages);
+  }
+
+  // BATCH: fetch all existing audit messages for all threads at once
+  const { data: existingAuditMsgs } = await supabaseAdmin
+    .from('ticket_messages')
+    .select('thread_id, message_body, created_at')
+    .in('thread_id', allThreadIds)
+    .eq('message_type', 'ticket_update');
+
+  const existingAuditKeysByThread = new Map<string, Set<string>>();
+  for (const m of (existingAuditMsgs ?? []) as Array<{ thread_id: string; message_body: string | null; created_at: string | null }>) {
+    const set = existingAuditKeysByThread.get(m.thread_id) ?? new Set<string>();
+    set.add(`${m.created_at ?? ''}|${m.message_body ?? ''}`);
+    existingAuditKeysByThread.set(m.thread_id, set);
+  }
+
+  // BATCH: collect all new audit messages across all threads, then insert once
+  const auditMessagesToInsert: Array<Record<string, unknown>> = [];
+  const threadTimestampUpdates = new Map<string, { lastMessageAt: string; ticketStatus: string | null }>();
+
+  for (const thread of allThreads) {
+    if (!thread.er_ticket_id) continue;
+    const auditRows = auditRowsByTicketId.get(thread.er_ticket_id);
+    if (!auditRows?.length) continue;
+
+    const existingKeys = existingAuditKeysByThread.get(thread.id) ?? new Set<string>();
+    const newAudit = auditRows
+      .filter((row) => row.created_at)
+      .map((row) => ({ row, body: auditMessage(row) }))
+      .filter((item) => !existingKeys.has(`${item.row.created_at}|${item.body}`))
+      .map((item) => ({
+        thread_id: thread.id,
+        request_id: thread.request_id,
+        sender_profile_id: null,
+        sender_role: null,
+        sender_name: 'USHS Ticket Updates',
+        message_body: item.body,
+        message_type: 'ticket_update',
+        is_internal: false,
+        created_at: item.row.created_at,
+      }));
+
+    if (!newAudit.length) continue;
+
+    auditMessagesToInsert.push(...newAudit);
+
+    const latestCreatedAt = newAudit[newAudit.length - 1].created_at as string;
+    const latestStatus = [...auditRows].reverse()
+      .find((r) => (r.field || '').trim().toLowerCase() === 'status')?.after_value ?? null;
+    const currentLast = thread.last_message_at || thread.created_at;
+    const auditTime = latestCreatedAt ? new Date(latestCreatedAt).getTime() : 0;
+    const currentTime = currentLast ? new Date(currentLast).getTime() : 0;
+    threadTimestampUpdates.set(thread.id, {
+      lastMessageAt: auditTime > currentTime ? latestCreatedAt : (currentLast || new Date().toISOString()),
+      ticketStatus: latestStatus,
+    });
+  }
+
+  if (auditMessagesToInsert.length) {
+    const { error: auditInsertError } = await supabaseAdmin.from('ticket_messages').insert(auditMessagesToInsert);
+    if (!auditInsertError) {
+      for (const [threadId, update] of threadTimestampUpdates) {
         await supabaseAdmin
           .from('ticket_message_threads')
           .update({
-            customer_id: localCustomerId,
-            er_customer_id: erCustomerId,
-            customer_name: erCustomerName(erCustomer),
-            customer_phone: cleanString(erCustomer?.phone) || cleanString(erCustomer?.second_phone),
-            customer_email: cleanString(erCustomer?.email),
+            last_message_at: update.lastMessageAt,
             updated_at: new Date().toISOString(),
+            ticket_status: update.ticketStatus,
           })
-          .eq('id', existingThread.id);
+          .eq('id', threadId);
       }
-      await insertInitialErMessage(supabaseAdmin, existingThread);
-      await syncErAuditMessages(supabaseAdmin, existingThread, auditRowsByTicketId.get(erTicketId));
-      await upsertLocalTicketErLink(supabaseAdmin, existingThread);
-      continue;
     }
+  }
 
-    const insertPayload = mapErTicketToThreadInsert(ticket, erCustomer, localCustomerId);
-    const { data: created, error: createError } = await supabaseAdmin
-      .from('ticket_message_threads')
-      .insert(insertPayload)
-      .select(threadSelect)
-      .single();
+  // BATCH: upsert ER links for all threads that have both a customer and an ER ticket
+  const erLinksPayload = allThreads
+    .filter((t) => t.customer_id && t.er_ticket_id)
+    .map((t) => ({
+      local_customer_id: t.customer_id,
+      local_request_id: t.request_id,
+      er_ticket_id: t.er_ticket_id,
+      er_ticket_no: t.er_ticket_no || t.request_number,
+      er_customer_id: t.er_customer_id,
+      link_type: 'er_customer_match',
+      linked_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    }));
 
-    if (!createError && created) {
-      const thread = created as unknown as TicketMessageThread;
-      await insertInitialErMessage(supabaseAdmin, thread);
-      await syncErAuditMessages(supabaseAdmin, thread, auditRowsByTicketId.get(erTicketId));
-      await upsertLocalTicketErLink(supabaseAdmin, thread);
+  if (erLinksPayload.length) {
+    try {
+      await supabaseAdmin
+        .from('ticket_er_links')
+        .upsert(erLinksPayload, { onConflict: 'local_customer_id,er_ticket_id' });
+    } catch {
+      // Optional local tracking table.
     }
   }
 }
@@ -889,6 +1076,22 @@ export async function listTicketMessageThreads(
 
   if (auth.role === 'customer') {
     query = query.eq('customer_id', auth.profile.id);
+  } else {
+    // Staff see only the internal staff threads (source_system = 'er_ticket_board').
+    // Customer-facing threads (er_portal_service_request, local_verified_ticket) are hidden from staff view.
+    query = query.eq('source_system', 'er_ticket_board');
+
+    // CSR agents and team leaders are further filtered to their branch_access.
+    // Managers and admins see all branches.
+    if (auth.role === 'csr' || auth.role === 'team_leader') {
+      const branches = (auth.profile.branch_access ?? '')
+        .split('|')
+        .map((b) => b.trim())
+        .filter(Boolean);
+      if (branches.length > 0) {
+        query = query.in('service_city', branches);
+      }
+    }
   }
 
   const { data: threadsData, error } = await query;

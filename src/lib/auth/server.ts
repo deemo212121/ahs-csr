@@ -120,6 +120,7 @@ type ErStaffProfileRow = {
   phone_number: string | null;
   is_active: boolean | null;
   assigned_branch: string | null;
+  branch_access: string | null;
   created_at: string | null;
 };
 
@@ -146,6 +147,7 @@ function mapErStaffProfile(row: ErStaffProfileRow, role: Exclude<AppRole, 'custo
     email: row.email ?? '',
     phone_number: row.phone_number,
     region: row.assigned_branch,
+    branch_access: row.branch_access,
     is_active: row.is_active === true,
     created_at: row.created_at,
   };
@@ -170,7 +172,7 @@ async function getErStaffContext(firebaseUid: string, tokenEmail: string): Promi
   const table = process.env.ER_PROFILES_TABLE?.trim() || 'profiles';
   const { data, error } = await erSupabase
     .from(table)
-    .select('id, firebase_uid, company_id, email, username, display_name, role, phone_number, is_active, assigned_branch, created_at')
+    .select('id, firebase_uid, company_id, email, username, display_name, role, phone_number, is_active, assigned_branch, branch_access, created_at')
     .eq('firebase_uid', firebaseUid)
     .maybeSingle();
 

@@ -5,7 +5,7 @@ import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { syncApprovedRequestToEr } from '@/lib/er-sync';
 import { NOTIFY_CHANNELS, pingChannel } from '@/lib/notifications/broadcast';
 import { reviewErModePortalRequest, useErTicketDatabase } from '@/lib/er-ticket-database';
-import { ensureErPortalRequestMessageThread, ensureTicketMessageThread } from '@/lib/messages';
+import { ensureErPortalRequestMessageThread, ensureErPortalRequestStaffThread, ensureTicketMessageThread } from '@/lib/messages';
 
 const reviewSchema = z.object({
   action: z.enum(['approve', 'reject']),
@@ -33,6 +33,7 @@ export async function POST(
       if (body.action === 'approve') {
         const supabaseAdmin = getSupabaseAdmin();
         await ensureErPortalRequestMessageThread(supabaseAdmin, result.request);
+        await ensureErPortalRequestStaffThread(supabaseAdmin, result.request);
       }
       await pingChannel(NOTIFY_CHANNELS.verify);
       return NextResponse.json(result);
