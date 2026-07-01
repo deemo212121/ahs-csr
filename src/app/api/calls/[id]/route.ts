@@ -15,12 +15,14 @@ const callSelect = `
   accepted_by_role,
   staff_joined_at,
   customer_joined_at,
-  queued_at
+  queued_at,
+  notes
 `;
 
 const patchSchema = z.object({
-  action: z.enum(['accept', 'start', 'end', 'cancel', 'heartbeat']),
+  action: z.enum(['accept', 'start', 'end', 'cancel', 'heartbeat', 'add_note']),
   reason: z.string().max(240).optional(),
+  note: z.string().max(1000).optional(),
 });
 
 function text(value: unknown) {
@@ -113,6 +115,22 @@ export async function PATCH(
       updates = isStaff ? { last_staff_seen_at: now } : { last_customer_seen_at: now };
       if (isStaff && !call.staff_joined_at) updates.staff_joined_at = now;
       if (isCustomerOwner && !call.customer_joined_at) updates.customer_joined_at = now;
+    }
+
+    if (body.action === 'add_note') {
+      requireRole(auth, ['csr', 'team_leader', 'csr_manager', 'admin']);
+      if (text(call.status) !== 'completed') {
+        throw new Error('Notes can only be added to a completed call.');
+      }
+      if (call.accepted_by_profile_id !== staffProfileKey(auth)) {
+        throw new Error('Only the CSR who answered this call can add a note.');
+      }
+      if (text(call.notes)) {
+        throw new Error('A note has already been added to this call and cannot be changed.');
+      }
+      const note = (body.note || '').trim();
+      if (!note) throw new Error('Note cannot be empty.');
+      updates = { notes: note };
     }
 
     if (body.action === 'end' || body.action === 'cancel') {

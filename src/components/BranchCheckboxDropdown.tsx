@@ -192,7 +192,7 @@ export function BranchCheckboxDropdown({
 
   return (
     <div className="branch-dropdown-field" ref={wrapperRef}>
-      <span className="branch-dropdown-label">{label}</span>
+      {label ? <span className="branch-dropdown-label">{label}</span> : null}
       <button
         aria-expanded={open}
         className={`branch-dropdown-toggle${open ? ' is-open' : ''}`}

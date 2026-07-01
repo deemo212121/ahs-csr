@@ -3,23 +3,21 @@
 import Link from 'next/link';
 import { ClipboardList, Filter, PhoneCall, Plus, RefreshCw } from 'lucide-react';
 import { useMemo, useState } from 'react';
-import { useAuth } from '@/components/AuthProvider';
 import { useLeadershipRequests } from '@/components/leadership/useLeadershipRequests';
 import { BranchCheckboxDropdown } from '@/components/BranchCheckboxDropdown';
 import { ErTicketListTable } from '@/components/ErTicketListTable';
-import { assignedBranchesFromProfile, erLocationText, erSourceText, erStatusText, filterErTickets, uniqueSorted } from '@/components/erTicketFilters';
-import { usePersistentBranchFilter } from '@/components/usePersistentBranchFilter';
+import { erSourceText, erStatusText, filterErTickets, uniqueSorted } from '@/components/erTicketFilters';
+import { useBranchFilter } from '@/lib/useBranchFilter';
+import { BRANCHES } from '@/lib/branches';
 
 export function CsrTicketsPage() {
-  const { profile } = useAuth();
   const { requests, loading, error, refresh } = useLeadershipRequests(500, 'view=tickets');
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState('all');
   const [source, setSource] = useState('all');
 
-  const branchOptions = useMemo(() => uniqueSorted(requests.map(erLocationText)), [requests]);
-  const assignedBranches = useMemo(() => assignedBranchesFromProfile(profile, branchOptions), [branchOptions, profile]);
-  const { selectedBranches, setSelectedBranches } = usePersistentBranchFilter('ahs-csr-ticket-branches', branchOptions, assignedBranches);
+  const branchOptions = useMemo(() => [...BRANCHES], []);
+  const { selectedBranches, setSelectedBranches } = useBranchFilter();
   const filtered = useMemo(
     () => filterErTickets(requests, { search, status, branches: selectedBranches, source }),
     [requests, search, status, selectedBranches, source],
@@ -30,7 +28,7 @@ export function CsrTicketsPage() {
   const reset = () => {
     setSearch('');
     setStatus('all');
-    setSelectedBranches(assignedBranches.length ? assignedBranches : branchOptions);
+    setSelectedBranches(branchOptions);
     setSource('all');
     void refresh();
   };
@@ -40,7 +38,7 @@ export function CsrTicketsPage() {
       <section className="manager-page-title-row split csr-request-title-row">
         <div>
           <h1><ClipboardList size={38} /> Tickets</h1>
-          <p className="er-ticket-view-note">Default view follows your assigned branch. Use the branch checklist to include or remove other branches when support needs wider visibility.</p>
+          <p className="er-ticket-view-note">Use the branch checklist in Notification Settings (or here) to control which branches you see everywhere in the portal.</p>
         </div>
         <div className="button-row">
           <Link className="btn btn-primary" href="/csr/manual"><Plus size={16} /> Create Manual Ticket</Link>

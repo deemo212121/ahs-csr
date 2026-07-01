@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Settings2, Volume2, VolumeX } from 'lucide-react';
+import { Check, Settings2, Volume2, VolumeX } from 'lucide-react';
 import {
   DEFAULT_NOTIFICATION_SETTINGS,
   getNotificationSettings,
@@ -10,6 +10,9 @@ import {
   type NotificationSettings as NotificationSettingsValue,
 } from '@/lib/notifications/settings';
 import { previewNotificationSound } from '@/lib/notifications/sounds';
+import { BRANCHES } from '@/lib/branches';
+import { useBranchFilter } from '@/lib/useBranchFilter';
+import { BranchCheckboxDropdown } from '@/components/BranchCheckboxDropdown';
 
 const CATEGORY_LABELS: Record<NotificationCategory, string> = {
   verify: 'New Tickets',
@@ -17,13 +20,34 @@ const CATEGORY_LABELS: Record<NotificationCategory, string> = {
   calls: 'Call Queue',
 };
 
-export function NotificationSettings({ availableRegions = [] }: { availableRegions?: string[] }) {
+export function NotificationSettings() {
   const [open, setOpen] = useState(false);
   const [settings, setSettings] = useState<NotificationSettingsValue>(DEFAULT_NOTIFICATION_SETTINGS);
+  const { selectedBranches, applyBranches } = useBranchFilter();
+  const [pendingBranches, setPendingBranches] = useState(selectedBranches);
+  const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
 
   useEffect(() => {
     setSettings(getNotificationSettings());
   }, []);
+
+  useEffect(() => {
+    setPendingBranches(selectedBranches);
+  }, [selectedBranches]);
+
+  const isDirty = pendingBranches.length !== selectedBranches.length
+    || pendingBranches.some((branch) => !selectedBranches.includes(branch));
+
+  async function saveBranches() {
+    setSaveState('saving');
+    try {
+      await applyBranches(pendingBranches);
+      setSaveState('saved');
+      window.setTimeout(() => setSaveState((current) => (current === 'saved' ? 'idle' : current)), 2000);
+    } catch {
+      setSaveState('error');
+    }
+  }
 
   function update(next: Partial<NotificationSettingsValue>) {
     const merged = { ...settings, ...next };
@@ -33,16 +57,6 @@ export function NotificationSettings({ availableRegions = [] }: { availableRegio
 
   function toggleCategory(category: NotificationCategory) {
     update({ categories: { ...settings.categories, [category]: !settings.categories[category] } });
-  }
-
-  function toggleRegion(region: string) {
-    const current = settings.filterRegions;
-    const next = current.includes(region)
-      ? current.filter((r) => r !== region)
-      : [...current, region];
-    // If all regions are individually selected, normalise back to "all" (empty array).
-    const nextNorm = next.length === availableRegions.length ? [] : next;
-    update({ filterRegions: nextNorm });
   }
 
   return (
@@ -106,31 +120,26 @@ export function NotificationSettings({ availableRegions = [] }: { availableRegio
             </div>
           ))}
 
-          {availableRegions.length > 0 ? (
-            <div className="notification-settings-filter-section">
-              <span className="notification-settings-filter-label">Branch / Region Filter</span>
-              <div className="notification-settings-filter-list">
-                <label>
-                  <input
-                    checked={settings.filterRegions.length === 0}
-                    onChange={() => update({ filterRegions: [] })}
-                    type="checkbox"
-                  />
-                  <span>All branches</span>
-                </label>
-                {availableRegions.map((region) => (
-                  <label key={region}>
-                    <input
-                      checked={settings.filterRegions.includes(region)}
-                      onChange={() => toggleRegion(region)}
-                      type="checkbox"
-                    />
-                    <span>{region}</span>
-                  </label>
-                ))}
-              </div>
+          <div className="notification-settings-filter-section">
+            <span className="notification-settings-filter-label">Branch / Region Filter</span>
+            <p className="notification-settings-filter-hint">
+              This is your primary branch filter — it controls Tickets, Verify, Messages, and Calls / Call History too.
+            </p>
+            <BranchCheckboxDropdown branches={[...BRANCHES]} selectedBranches={pendingBranches} onChange={setPendingBranches} />
+            <div className="notification-settings-filter-save-row">
+              <button
+                className="notification-settings-save-btn"
+                disabled={!isDirty || saveState === 'saving'}
+                onClick={() => void saveBranches()}
+                type="button"
+              >
+                {saveState === 'saving' ? 'Saving...' : <><Check size={14} /> Save filter</>}
+              </button>
+              {saveState === 'saved' ? <span className="notification-settings-save-status success">Saved</span> : null}
+              {saveState === 'error' ? <span className="notification-settings-save-status error">Couldn&apos;t save — try again</span> : null}
+              {isDirty && saveState === 'idle' ? <span className="notification-settings-save-status">Unsaved changes</span> : null}
             </div>
-          ) : null}
+          </div>
         </div>
       ) : null}
     </div>

@@ -1,29 +1,28 @@
 'use client';
 
 import {
-  Activity,
-  AlertTriangle,
-  CalendarDays,
+  Clock3,
   ClipboardList,
-  Hash,
   Headphones,
   Mail,
-  Phone,
-  RefreshCw,
+  MapPin,
   Shield,
   UserSquare2,
+  X,
 } from 'lucide-react';
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '@/components/AuthProvider';
 import { useLeadershipRequests } from '@/components/leadership/useLeadershipRequests';
-import { erStatusText } from '@/components/erTicketFilters';
+import { fetchJsonWithFirebase, type AuthTokenUser } from '@/lib/auth/client';
+import type { RtcCall, RtcCallListResponse } from '@/lib/calls/types';
 import type { ServiceRequest } from '@/lib/types';
 
-const callActivity = [
-  { customer: 'Bubble Max / Decatur', status: 'completed', duration: '00:12', date: 'Jun 15, 2026 4:29 PM' },
-  { customer: 'Bubble Max / Decatur', status: 'completed', duration: '00:29', date: 'Jun 15, 2026 4:11 PM' },
-  { customer: 'Mitch Modelo / Test address', status: 'completed', duration: '00:19', date: 'Jun 15, 2026 4:07 PM' },
-];
+function getLastLogin(user: AuthTokenUser | null): string | null {
+  if (!user) return null;
+  if ('metadata' in user && user.metadata?.lastSignInTime) return user.metadata.lastSignInTime;
+  if ('supabaseUser' in user && user.supabaseUser?.last_sign_in_at) return user.supabaseUser.last_sign_in_at;
+  return null;
+}
 
 function EmptyRow({ label }: { label: string }) {
   return (
@@ -37,14 +36,8 @@ function ticketNo(request: ServiceRequest) {
   return request.er_ticket?.ticket_no || request.request_number || '—';
 }
 
-function lastHandledAt(request: ServiceRequest) {
-  return (
-    request.handled_last_activity_at ||
-    request.er_ticket?.status_changed_at ||
-    request.er_ticket?.updated_at ||
-    request.updated_at ||
-    request.requested_at
-  );
+function reviewedAt(request: ServiceRequest) {
+  return request.updated_at || request.requested_at;
 }
 
 function formatDateTime(value?: string | null) {
@@ -62,17 +55,123 @@ function isToday(value?: string | null) {
   return parsed.getFullYear() === now.getFullYear() && parsed.getMonth() === now.getMonth() && parsed.getDate() === now.getDate();
 }
 
-function isOpenStatus(request: ServiceRequest) {
-  const status = erStatusText(request).toLowerCase();
-  return !['closed', 'complete', 'completed', 'cancel', 'cancelled', 'canceled', 'cl-data-closed'].some((word) => status.includes(word));
+function formatCallDuration(seconds?: number | null) {
+  if (!seconds) return '—';
+  const minutes = Math.floor(seconds / 60);
+  const rest = seconds % 60;
+  return `${minutes}m ${rest}s`;
 }
 
-function changeSummary(request: ServiceRequest) {
-  const field = request.handled_last_field || request.handled_last_action || 'ticket';
-  const before = request.handled_last_before || 'blank';
-  const after = request.handled_last_after || erStatusText(request);
-  if (!request.handled_last_action && !request.handled_last_field) return 'Last ticket update by this CSR';
-  return `${field.replace(/_/g, ' ')}: ${before} → ${after}`;
+function TicketSummaryModal({ request, onClose }: { request: ServiceRequest; onClose: () => void }) {
+  return (
+    <div className="csr-summary-backdrop" role="presentation" onClick={onClose}>
+      <section className="csr-summary-modal" role="dialog" aria-modal="true" onClick={(event) => event.stopPropagation()}>
+        <header>
+          <div>
+            <span className="csr-summary-eyebrow"><ClipboardList size={14} /> Verified ticket</span>
+            <h2>{request.full_name || 'Unknown customer'}</h2>
+            <p>{ticketNo(request)}</p>
+          </div>
+          <button aria-label="Close ticket summary" onClick={onClose} type="button"><X size={18} /></button>
+        </header>
+        <div className="csr-summary-grid">
+          <div><span>Date Reviewed</span><strong>{formatDateTime(reviewedAt(request))}</strong></div>
+          <div><span>Status</span><strong className={`agent-pill ${request.verification_status === 'approved' ? 'approved' : 'rejected'}`}>{request.verification_status}</strong></div>
+          <div><span>Branch / Region</span><strong>{request.region || '—'}</strong></div>
+          <div><span>Phone</span><strong>{request.phone_number || '—'}</strong></div>
+          <div><span>Email</span><strong>{request.customer_email || '—'}</strong></div>
+          <div><span>Service Address</span><strong>{request.service_address || '—'}</strong></div>
+        </div>
+        <div className="csr-summary-notes">
+          <h3>Notes</h3>
+          <p>{request.verification_status === 'rejected' ? request.verification_reject_reason || 'No reason recorded.' : request.verification_notes || 'No notes recorded.'}</p>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function CallSummaryModal({
+  call,
+  user,
+  onClose,
+  onNoteSaved,
+}: {
+  call: RtcCall;
+  user: AuthTokenUser | null;
+  onClose: () => void;
+  onNoteSaved: (updated: RtcCall) => void;
+}) {
+  const [noteDraft, setNoteDraft] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+
+  const hasNote = !!call.notes?.trim();
+
+  async function saveNote() {
+    if (!user || saving || hasNote) return;
+    const note = noteDraft.trim();
+    if (!note) {
+      setSaveError('Note cannot be empty.');
+      return;
+    }
+    setSaving(true);
+    setSaveError(null);
+    try {
+      const data = await fetchJsonWithFirebase<{ call: RtcCall }>(user, `/api/calls/${call.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ action: 'add_note', note }),
+      });
+      onNoteSaved({ ...call, ...data.call });
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : 'Unable to save note.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="csr-summary-backdrop" role="presentation" onClick={onClose}>
+      <section className="csr-summary-modal" role="dialog" aria-modal="true" onClick={(event) => event.stopPropagation()}>
+        <header>
+          <div>
+            <span className="csr-summary-eyebrow"><Headphones size={14} /> Web call</span>
+            <h2>{call.customer_name}</h2>
+            <p>{call.request_number || 'No linked ticket'}</p>
+          </div>
+          <button aria-label="Close call summary" onClick={onClose} type="button"><X size={18} /></button>
+        </header>
+        <div className="csr-summary-grid">
+          <div><span>Date</span><strong>{formatDateTime(call.queued_at)}</strong></div>
+          <div><span>Status</span><strong className="agent-pill completed">{call.status}</strong></div>
+          <div><span>Region</span><strong><MapPin size={13} /> {call.branch || '—'}</strong></div>
+          <div><span>Duration</span><strong>{formatCallDuration(call.call_duration_seconds)}</strong></div>
+          <div><span>Phone</span><strong>{call.phone_number || '—'}</strong></div>
+          <div><span>Email</span><strong>{call.customer_email || '—'}</strong></div>
+        </div>
+        <div className="csr-summary-notes">
+          <h3>Notes</h3>
+          {hasNote ? (
+            <p>{call.notes}</p>
+          ) : (
+            <div className="csr-note-form">
+              <textarea
+                maxLength={1000}
+                onChange={(event) => setNoteDraft(event.target.value)}
+                placeholder="Add a note for this call. This can only be saved once and cannot be edited afterward."
+                rows={3}
+                value={noteDraft}
+              />
+              {saveError ? <p className="csr-note-error">{saveError}</p> : null}
+              <button className="csr-note-save-btn" disabled={saving || !noteDraft.trim()} onClick={() => void saveNote()} type="button">
+                {saving ? 'Saving...' : 'Save Note'}
+              </button>
+            </div>
+          )}
+        </div>
+      </section>
+    </div>
+  );
 }
 
 function branchChips(value?: string | null) {
@@ -85,54 +184,71 @@ function branchChips(value?: string | null) {
   return branches.length ? branches : ['ER profile branch filter'];
 }
 
-function TicketNumberCloud({ title, subtitle, tickets }: { title: string; subtitle: string; tickets: ServiceRequest[] }) {
-  return (
-    <div className="csr-ticket-number-card">
-      <div className="csr-ticket-number-head">
-        <div>
-          <span>{title}</span>
-          <strong>{tickets.length}</strong>
-          <p>{subtitle}</p>
-        </div>
-        <Hash size={20} />
-      </div>
-      <div className="csr-ticket-number-list">
-        {tickets.length ? (
-          tickets.slice(0, 18).map((request) => <span key={`${request.id}-${ticketNo(request)}`}>{ticketNo(request)}</span>)
-        ) : (
-          <em>No handled ticket numbers yet.</em>
-        )}
-      </div>
-    </div>
-  );
-}
-
 export function CsrDashboard() {
-  const { profile } = useAuth();
-  const { requests, loading, error, refresh } = useLeadershipRequests(500, 'view=tickets');
+  const { profile, user } = useAuth();
+  const { requests, loading, error } = useLeadershipRequests(500);
 
-  const handledTickets = useMemo(
-    () => requests.filter((request) => request.handled_by_current_user),
-    [requests],
+  const [calls, setCalls] = useState<RtcCall[]>([]);
+  const [callsLoading, setCallsLoading] = useState(true);
+  const [callsError, setCallsError] = useState<string | null>(null);
+  const [selectedTicket, setSelectedTicket] = useState<ServiceRequest | null>(null);
+  const [selectedCall, setSelectedCall] = useState<RtcCall | null>(null);
+
+  useEffect(() => {
+    if (!user) return;
+    const authUser = user;
+    let cancelled = false;
+    async function loadCalls() {
+      setCallsLoading(true);
+      setCallsError(null);
+      try {
+        const data = await fetchJsonWithFirebase<RtcCallListResponse>(authUser, '/api/calls?history=true&limit=200');
+        if (cancelled) return;
+        if (data.setup_required) throw new Error(data.message || 'Web call queue setup is missing.');
+        setCalls(data.calls);
+      } catch (err) {
+        if (!cancelled) setCallsError(err instanceof Error ? err.message : 'Unable to load call history.');
+      } finally {
+        if (!cancelled) setCallsLoading(false);
+      }
+    }
+    void loadCalls();
+    return () => {
+      cancelled = true;
+    };
+  }, [user]);
+
+  const myVerifiedTickets = useMemo(
+    () =>
+      requests
+        .filter(
+          (request) =>
+            request.verification_reviewed_by === profile?.id &&
+            (request.verification_status === 'approved' || request.verification_status === 'rejected'),
+        )
+        .sort((a, b) => new Date(reviewedAt(b) || 0).getTime() - new Date(reviewedAt(a) || 0).getTime()),
+    [requests, profile?.id],
   );
 
-  const sortedHandledTickets = useMemo(
-    () => [...handledTickets].sort((a, b) => new Date(lastHandledAt(b) || 0).getTime() - new Date(lastHandledAt(a) || 0).getTime()),
-    [handledTickets],
+  const myDisplayName = [profile?.first_name, profile?.last_name].filter(Boolean).join(' ') || profile?.email || '';
+
+  const myAnsweredCalls = useMemo(
+    () =>
+      calls
+        .filter((call) => !!myDisplayName && call.accepted_by_name === myDisplayName && call.status === 'completed')
+        .sort((a, b) => new Date(b.queued_at || 0).getTime() - new Date(a.queued_at || 0).getTime()),
+    [calls, myDisplayName],
   );
 
-  const todayHandledTickets = useMemo(
-    () => sortedHandledTickets.filter((request) => isToday(lastHandledAt(request))),
-    [sortedHandledTickets],
-  );
+  const verifiedToday = myVerifiedTickets.filter(
+    (request) => request.verification_status === 'approved' && isToday(reviewedAt(request)),
+  ).length;
+  const rejectedToday = myVerifiedTickets.filter(
+    (request) => request.verification_status === 'rejected' && isToday(reviewedAt(request)),
+  ).length;
+  const callsAnsweredToday = myAnsweredCalls.filter((call) => isToday(call.queued_at)).length;
 
-  const activeHandled = handledTickets.filter(isOpenStatus).length;
-  const scheduledHandled = handledTickets.filter((request) => request.er_ticket?.schedule_date || request.preferred_date).length;
-  const totalUpdates = handledTickets.reduce((sum, request) => sum + (request.handled_activity_count ?? 0), 0);
-  const todayUpdates = todayHandledTickets.reduce((sum, request) => sum + (request.handled_activity_count ?? 0), 0);
-  const recentTickets = sortedHandledTickets.slice(0, 5);
-
-  const fullName = [profile?.first_name, profile?.last_name].filter(Boolean).join(' ') || 'CSR Agent';
+  const fullName = myDisplayName || 'CSR Agent';
   const profileBranches = branchChips(profile?.region || profile?.city || null);
 
   return (
@@ -152,37 +268,13 @@ export function CsrDashboard() {
             <strong>{profile?.email || 'No email found'}</strong>
           </div>
           <div className="agent-info-card">
-            <Phone size={18} />
-            <span>Phone</span>
-            <strong>{profile?.phone_number || '--'}</strong>
-          </div>
-          <div className="agent-info-card">
-            <Activity size={18} />
-            <span>Handled Source</span>
-            <strong>ER Audit Logs</strong>
+            <Clock3 size={18} />
+            <span>Last Login</span>
+            <strong>{formatDateTime(getLastLogin(user))}</strong>
           </div>
         </div>
         <div className="agent-region-row">
           {profileBranches.map((branch) => <span key={branch}>{branch}</span>)}
-        </div>
-        <p className="agent-help-text">
-          Handled tickets are based first on ER ticket_audit_log.changed_by matching this CSR profile, with tickets.status_changed_by as fallback.
-        </p>
-      </section>
-
-      <section className="agent-panel csr-ticket-number-section">
-        <div className="csr-section-title-row">
-          <div>
-            <h2><ClipboardList size={17} /> My Handled Ticket Numbers</h2>
-            <p>Dashboard numbers below only count tickets this CSR handled.</p>
-          </div>
-          <button className="btn btn-secondary csr-soft-refresh" onClick={() => void refresh()} type="button">
-            <RefreshCw size={15} /> Refresh
-          </button>
-        </div>
-        <div className="csr-ticket-number-grid">
-          <TicketNumberCloud title="Overall Handled" subtitle="All ticket numbers touched by this CSR" tickets={sortedHandledTickets} />
-          <TicketNumberCloud title="Handled Today" subtitle="Ticket numbers updated today by this CSR" tickets={todayHandledTickets} />
         </div>
       </section>
 
@@ -191,109 +283,115 @@ export function CsrDashboard() {
         <div className="agent-stat-grid csr-agent-stat-grid">
           <div className="agent-stat-card cyan">
             <Shield size={18} />
-            <strong>{todayHandledTickets.length}</strong>
-            <span>Tickets Handled Today</span>
-          </div>
-          <div className="agent-stat-card blue">
-            <ClipboardList size={18} />
-            <strong>{handledTickets.length}</strong>
-            <span>Overall Handled Tickets</span>
-          </div>
-          <div className="agent-stat-card green">
-            <CalendarDays size={18} />
-            <strong>{scheduledHandled}</strong>
-            <span>Handled With Schedule</span>
+            <strong>{verifiedToday}</strong>
+            <span>Verified Today</span>
           </div>
           <div className="agent-stat-card">
-            <Activity size={18} />
-            <strong>{todayUpdates || totalUpdates}</strong>
-            <span>{todayUpdates ? 'Updates By Me Today' : 'Total Updates By Me'}</span>
+            <ClipboardList size={18} />
+            <strong>{rejectedToday}</strong>
+            <span>Rejected</span>
           </div>
           <div className="agent-stat-card green">
             <Headphones size={18} />
-            <strong>{callActivity.length}</strong>
-            <span>Total Calls Handled</span>
+            <strong>{callsAnsweredToday}</strong>
+            <span>Calls Answered</span>
           </div>
         </div>
       </section>
 
       {error ? <div className="customer-alert">{error}</div> : null}
-      {loading ? <div className="customer-alert">Loading CSR handled tickets from ER...</div> : null}
+      {loading ? <div className="customer-alert">Loading CSR verification history...</div> : null}
+      {callsError ? <div className="customer-alert">{callsError}</div> : null}
 
-      <section className="agent-dashboard-grid">
-        <div className="agent-table-panel">
+      <section className="agent-dashboard-grid csr-dashboard-grid-redesigned">
+        <div className="agent-table-panel csr-verified-panel">
           <h2>
-            <AlertTriangle size={16} />
-            My Recent Warnings
+            <ClipboardList size={16} />
+            Number of Verified Tickets
           </h2>
-          <div className="agent-table-head five">
+          <div className="agent-table-head six">
             <span>Date</span>
-            <span>From</span>
-            <span>Title</span>
-            <span>Level</span>
-            <span>Status</span>
-          </div>
-          <EmptyRow label="No warnings recorded." />
-        </div>
-        <div className="agent-table-panel">
-          <h2>
-            <AlertTriangle size={16} />
-            My Recent Mistakes
-          </h2>
-          <div className="agent-table-head five">
-            <span>Date</span>
-            <span>From</span>
-            <span>Title</span>
-            <span>Level</span>
-            <span>Status</span>
-          </div>
-          <EmptyRow label="No mistakes recorded." />
-        </div>
-        <div className="agent-table-panel csr-recent-ticket-panel">
-          <h2>My Recent Handled Tickets</h2>
-          <div className="agent-table-head five">
-            <span>Date / Time</span>
             <span>Ticket #</span>
+            <span>Name of CX</span>
+            <span>Branch/Region</span>
             <span>Status</span>
-            <span>Updates</span>
-            <span>Latest Change</span>
+            <span>Notes</span>
           </div>
-          {recentTickets.length ? (
+          {myVerifiedTickets.length ? (
             <div className="agent-table-body">
-              {recentTickets.map((request) => (
-                <div className="agent-table-row five" key={request.id}>
-                  <span>{formatDateTime(lastHandledAt(request))}</span>
+              {myVerifiedTickets.map((request) => (
+                <button
+                  className="agent-table-row six csr-clickable-row"
+                  key={request.id}
+                  onClick={() => setSelectedTicket(request)}
+                  type="button"
+                >
+                  <span>{formatDateTime(reviewedAt(request))}</span>
                   <strong>{ticketNo(request)}</strong>
-                  <span className="agent-pill approved">{erStatusText(request)}</span>
-                  <span>{request.handled_activity_count || 1}</span>
-                  <span>{changeSummary(request)}</span>
-                </div>
+                  <span>{request.full_name || '—'}</span>
+                  <span>{request.region || '—'}</span>
+                  <span className={`agent-pill ${request.verification_status === 'approved' ? 'approved' : 'rejected'}`}>
+                    {request.verification_status}
+                  </span>
+                  <span>{request.verification_status === 'rejected' ? request.verification_reject_reason || '—' : request.verification_notes || '—'}</span>
+                </button>
               ))}
             </div>
           ) : (
-            <EmptyRow label="No handled ticket activity found for this CSR yet." />
+            <EmptyRow label="No verified ticket activity found for this CSR yet." />
           )}
         </div>
-        <div className="agent-table-panel">
-          <h2>My Recent Call Activity</h2>
-          <div className="agent-table-head four">
+        <div className="agent-table-panel csr-calls-panel">
+          <h2>
+            <Headphones size={16} />
+            Web Calls Handled
+          </h2>
+          <div className="agent-table-head six">
             <span>Date</span>
-            <span>Customer / City</span>
+            <span>Customer Name</span>
+            <span>Region</span>
             <span>Status</span>
             <span>Duration</span>
+            <span>Notes</span>
           </div>
-          <div className="agent-table-body">
-            {callActivity.map((call) => (
-              <div className="agent-table-row four" key={`${call.customer}-${call.date}`}>
-                <span>{call.date}</span>
-                <strong>{call.customer}</strong>
-                <span className="agent-pill approved">{call.status}</span>
-                <span>{call.duration}</span>
-              </div>
-            ))}
-          </div>
+          {callsLoading ? (
+            <EmptyRow label="Loading call history..." />
+          ) : myAnsweredCalls.length ? (
+            <div className="agent-table-body">
+              {myAnsweredCalls.map((call) => (
+                <button
+                  className="agent-table-row six csr-clickable-row"
+                  key={call.id}
+                  onClick={() => setSelectedCall(call)}
+                  type="button"
+                >
+                  <span>{formatDateTime(call.queued_at)}</span>
+                  <strong>{call.customer_name}</strong>
+                  <span>{call.branch || '—'}</span>
+                  <span className="agent-pill completed">{call.status}</span>
+                  <span>{formatCallDuration(call.call_duration_seconds)}</span>
+                  <span>{call.notes || '—'}</span>
+                </button>
+              ))}
+            </div>
+          ) : (
+            <EmptyRow label="No web calls answered by this CSR yet." />
+          )}
         </div>
       </section>
+
+      {selectedTicket ? <TicketSummaryModal request={selectedTicket} onClose={() => setSelectedTicket(null)} /> : null}
+      {selectedCall ? (
+        <CallSummaryModal
+          call={selectedCall}
+          user={user}
+          onClose={() => setSelectedCall(null)}
+          onNoteSaved={(updated) => {
+            setCalls((current) => current.map((call) => (call.id === updated.id ? updated : call)));
+            setSelectedCall(updated);
+          }}
+        />
+      ) : null}
     </div>
   );
 }

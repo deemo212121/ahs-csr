@@ -38,7 +38,6 @@ import { useNotificationHistory } from "@/lib/notifications/useNotificationHisto
 import { useToastQueue } from "@/lib/notifications/useToastQueue";
 import { playNotificationSound } from "@/lib/notifications/sounds";
 import { dispatchLiveUpdate } from "@/lib/notifications/useLiveUpdate";
-import { getNotificationSettings } from "@/lib/notifications/settings";
 import type { NotificationCategory } from "@/lib/notifications/settings";
 import type { AppRole } from "@/lib/types";
 
@@ -313,17 +312,9 @@ export function PortalShell({
   const toastQueue = useToastQueue(3);
   const notifHistory = useNotificationHistory(base);
 
-  // Reactively read notification settings so region filter updates take effect
-  // immediately without requiring a page reload.
-  const [notifSettings, setNotifSettings] = useState(getNotificationSettings);
-  useEffect(() => {
-    function onSettingsChanged(e: Event) {
-      setNotifSettings((e as CustomEvent).detail);
-    }
-    window.addEventListener('ushs-notification-settings-changed', onSettingsChanged);
-    return () => window.removeEventListener('ushs-notification-settings-changed', onSettingsChanged);
-  }, []);
-  const regionFilter = notifSettings.filterRegions;
+  // The branch/region filter lives on the user's profile (saved via
+  // /api/me/preferences) so it's the same everywhere and on every device.
+  const regionFilter = profile?.preferences?.filterRegions ?? [];
 
   function onArrival(category: NotificationCategory) {
     playNotificationSound(category);
@@ -349,13 +340,6 @@ export function PortalShell({
   });
 
   const liveNotificationCount = verifyFeed.count + messagesFeed.count + callsFeed.count;
-
-  const availableRegions = useMemo(() => {
-    const all = [...verifyFeed.items, ...callsFeed.items]
-      .map((item) => item.region)
-      .filter((r): r is string => Boolean(r));
-    return [...new Set(all)].sort();
-  }, [verifyFeed.items, callsFeed.items]);
 
   function badgeFor(href: string): number {
     if (href.includes("/verification")) return verifyFeed.count;
@@ -641,7 +625,7 @@ export function PortalShell({
             <div className="button-row agent-header-actions">
               {isAgentPortal ? <RealtimeStatus /> : null}
               <ThemeToggle />
-              {isAgentPortal ? <NotificationSettings availableRegions={availableRegions} /> : null}
+              {isAgentPortal ? <NotificationSettings /> : null}
               {isAgentPortal ? (
                 <>
                   <div className="agent-popover-anchor">

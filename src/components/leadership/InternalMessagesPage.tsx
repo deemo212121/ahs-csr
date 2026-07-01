@@ -4,6 +4,9 @@ import { CalendarDays, MessageSquare, RefreshCw, Send } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '@/components/AuthProvider';
 import { fetchJsonWithFirebase } from '@/lib/auth/client';
+import { BRANCHES } from '@/lib/branches';
+import { BranchCheckboxDropdown } from '@/components/BranchCheckboxDropdown';
+import { useBranchFilter } from '@/lib/useBranchFilter';
 
 type ThreadRequest = {
   id: string;
@@ -102,11 +105,15 @@ export function InternalMessagesPage({
     [activeId, threads],
   );
 
+  const branchOptions = useMemo(() => [...BRANCHES], []);
+  const { selectedBranches, setSelectedBranches } = useBranchFilter();
+
   const filteredThreads = useMemo(() => {
     const term = search.trim().toLowerCase();
-    if (!term) return threads;
     return threads.filter((thread) => {
       const request = thread.request;
+      if (!selectedBranches.length || !selectedBranches.includes(request?.region || '')) return false;
+      if (!term) return true;
       return [
         thread.request_number,
         thread.subject,
@@ -121,7 +128,7 @@ export function InternalMessagesPage({
         .filter(Boolean)
         .some((value) => String(value).toLowerCase().includes(term));
     });
-  }, [search, threads]);
+  }, [selectedBranches, search, threads]);
 
   async function loadThreads(silent = false) {
     if (!user) return;
@@ -218,6 +225,7 @@ export function InternalMessagesPage({
             placeholder="Search ticket, customer, phone, model..."
             value={search}
           />
+          <BranchCheckboxDropdown branches={branchOptions} selectedBranches={selectedBranches} onChange={setSelectedBranches} />
           <div className="leadership-thread-list ticket-thread-list">
             {loading ? <div className="message-empty-state">Loading conversations...</div> : null}
             {!loading && !filteredThreads.length ? (

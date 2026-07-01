@@ -47,6 +47,7 @@ type AuthState = {
   loginWithCustomerEmail: (email: string, password: string) => Promise<void>;
   registerCustomerEmail: (email: string, password: string, metadata?: CustomerRegistrationMetadata) => Promise<void>;
   refreshProfile: () => Promise<void>;
+  updateFilterRegions: (filterRegions: string[]) => Promise<void>;
   logout: () => Promise<void>;
 };
 
@@ -76,6 +77,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setHome(roleHome[nextUser.role]);
       setError(null);
       setLoading(false);
+      // Test accounts skip /api/me above for speed, but their saved branch
+      // filter still lives server-side (keyed by the fake test firebase_uid)
+      // — fetch it now so it survives a reload.
+      try {
+        const data = await fetchJsonWithFirebase<{ profile: AppProfile }>(nextUser, '/api/me');
+        if (data.profile?.preferences) {
+          setProfile((current) => current ? { ...current, preferences: data.profile.preferences } : current);
+        }
+      } catch {
+        // Non-fatal — filter just won't be pre-loaded this session.
+      }
       return;
     }
 
@@ -197,6 +209,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
       },
       refreshProfile: () => loadProfile(user),
+      updateFilterRegions: async (filterRegions: string[]) => {
+        if (!user) return;
+        setProfile((current) => current ? { ...current, preferences: { ...current.preferences, filterRegions } } : current);
+        // Local state already reflects the change; if this throws, the caller
+        // decides how to surface it (the filter still won't persist across
+        // reloads/devices until a save succeeds).
+        await fetchJsonWithFirebase(user, '/api/me/preferences', {
+          method: 'PATCH',
+          body: JSON.stringify({ filterRegions }),
+        });
+      },
       logout: async () => {
         if (isTestUser(user)) {
           clearTestLogin();

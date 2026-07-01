@@ -6,6 +6,9 @@ import { useLiveUpdate } from '@/lib/notifications/useLiveUpdate';
 import { fetchJsonWithFirebase } from '@/lib/auth/client';
 import { useAuth } from '@/components/AuthProvider';
 import type { ServiceRequest } from '@/lib/types';
+import { BRANCHES } from '@/lib/branches';
+import { BranchCheckboxDropdown } from '@/components/BranchCheckboxDropdown';
+import { useBranchFilter } from '@/lib/useBranchFilter';
 
 type DetailValue = string | number | boolean | null | undefined;
 type DetailSection = { title: string; rows: [string, DetailValue][] };
@@ -165,7 +168,6 @@ export function VerificationQueue() {
   const [selectedRequest, setSelectedRequest] = useState<ServiceRequest | null>(null);
   const [status, setStatus] = useState('pending');
   const [search, setSearch] = useState('');
-  const [region, setRegion] = useState('all');
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState<string | null>(null);
   const [messageTone, setMessageTone] = useState<'success' | 'error'>('success');
@@ -258,16 +260,14 @@ export function VerificationQueue() {
 
   useLiveUpdate('verify', () => { void load(); });
 
-  const regions = useMemo(() => {
-    const list = Array.from(new Set(pendingRequests.map((request) => request.region).filter(Boolean) as string[]));
-    return list.sort((a, b) => a.localeCompare(b));
-  }, [pendingRequests]);
+  const branchOptions = useMemo(() => [...BRANCHES], []);
+  const { selectedBranches, setSelectedBranches } = useBranchFilter();
 
   const visible = useMemo(() => {
     const term = search.trim().toLowerCase();
     return pendingRequests.filter((request) => {
       if (status !== 'pending' && request.verification_status !== status) return false;
-      if (region !== 'all' && request.region !== region) return false;
+      if (!selectedBranches.length || !selectedBranches.includes(request.region || '')) return false;
       if (!term) return true;
       return [
         request.request_number,
@@ -293,7 +293,7 @@ export function VerificationQueue() {
         .toLowerCase()
         .includes(term);
     });
-  }, [pendingRequests, region, search, status]);
+  }, [pendingRequests, selectedBranches, search, status]);
 
   const stats = useMemo(() => ({
     pending: allRequests.filter((request) => request.verification_status === 'pending').length,
@@ -347,7 +347,10 @@ export function VerificationQueue() {
       <section className="manager-verification-filters">
         <div className="field"><label>Search</label><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Ticket, name, phone, email, city, product, model, serial" /></div>
         <div className="field"><label>Status</label><select value={status} onChange={(event) => setStatus(event.target.value)}><option value="pending">Pending</option></select></div>
-        <div className="field wide"><label>Branch / Region</label><select value={region} onChange={(event) => setRegion(event.target.value)}><option value="all">All Branches</option>{regions.map((item) => <option key={item} value={item}>{item}</option>)}</select><small>Default view is all pending verification requests. Use this dropdown to narrow by branch.</small></div>
+        <div className="field wide">
+          <label>Branch / Region</label>
+          <BranchCheckboxDropdown branches={branchOptions} selectedBranches={selectedBranches} onChange={setSelectedBranches} />
+        </div>
         <button className="btn btn-primary" onClick={load} type="button"><ListFilter size={16} /> Apply Filter</button>
       </section>
 

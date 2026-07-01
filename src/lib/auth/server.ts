@@ -366,6 +366,24 @@ async function getSupabaseCustomerContext(accessToken: string): Promise<AuthCont
   };
 }
 
+async function attachPreferences(context: AuthContext): Promise<AuthContext> {
+  if (!context.firebaseUid) return context;
+  try {
+    const supabaseAdmin = getSupabaseAdmin();
+    const { data } = await supabaseAdmin
+      .from('user_preferences')
+      .select('preferences')
+      .eq('firebase_uid', context.firebaseUid)
+      .maybeSingle();
+    if (data?.preferences) {
+      return { ...context, profile: { ...context.profile, preferences: data.preferences } };
+    }
+  } catch {
+    // Preferences are optional; ignore lookup failures (e.g. table not migrated yet).
+  }
+  return context;
+}
+
 export async function getAuthContext(request: NextRequest): Promise<AuthContext> {
   const header = request.headers.get('authorization') ?? '';
   const token = header.match(/^Bearer\s+(.+)$/i)?.[1];
@@ -379,18 +397,18 @@ export async function getAuthContext(request: NextRequest): Promise<AuthContext>
     if (!isTestLoginAllowed()) {
       throw new Error('Test login is disabled.');
     }
-    return getTestAuthContext(testRole);
+    return attachPreferences(await getTestAuthContext(testRole));
   }
 
   if (token.startsWith('supabase:')) {
-    return getSupabaseCustomerContext(token.slice('supabase:'.length));
+    return attachPreferences(await getSupabaseCustomerContext(token.slice('supabase:'.length)));
   }
 
   const decoded = await getFirebaseAdminAuth().verifyIdToken(token);
   const firebaseUid = decoded.uid;
   const email = decoded.email ?? '';
   const context = await getErStaffContext(firebaseUid, email);
-  return { ...context, firebaseIdToken: token };
+  return attachPreferences({ ...context, firebaseIdToken: token });
 }
 
 export function localProfileId(context: AuthContext) {

@@ -7,8 +7,9 @@ import { useLiveUpdate } from '@/lib/notifications/useLiveUpdate';
 import { useLeadershipRequests } from '@/components/leadership/useLeadershipRequests';
 import { BranchCheckboxDropdown } from '@/components/BranchCheckboxDropdown';
 import { ErTicketListTable } from '@/components/ErTicketListTable';
-import { erLocationText, erStatusText, filterErTickets, uniqueSorted } from '@/components/erTicketFilters';
-import { usePersistentBranchFilter } from '@/components/usePersistentBranchFilter';
+import { erStatusText, filterErTickets, uniqueSorted } from '@/components/erTicketFilters';
+import { useBranchFilter } from '@/lib/useBranchFilter';
+import { BRANCHES } from '@/lib/branches';
 
 export function TicketsPage() {
   const { requests, loading, error, refresh } = useLeadershipRequests(500, 'view=tickets');
@@ -16,8 +17,8 @@ export function TicketsPage() {
   const [status, setStatus] = useState('all');
   useLiveUpdate('verify', () => { void refresh(); });
 
-  const branchOptions = useMemo(() => uniqueSorted(requests.map(erLocationText)), [requests]);
-  const { selectedBranches, setSelectedBranches } = usePersistentBranchFilter('ahs-manager-ticket-branches', branchOptions);
+  const branchOptions = useMemo(() => [...BRANCHES], []);
+  const { selectedBranches, setSelectedBranches } = useBranchFilter();
   const filtered = useMemo(() => filterErTickets(requests, { search, status, branches: selectedBranches }), [requests, search, status, selectedBranches]);
   const statuses = useMemo(() => uniqueSorted(requests.map(erStatusText)), [requests]);
 

@@ -98,7 +98,7 @@ export async function GET(request: NextRequest) {
     let query = supabaseAdmin
       .from('service_requests')
       .select(
-        'id, legacy_id, customer_id, request_number, ticket_source, source_system, origin_type, er_ticket_id, full_name, phone_number, secondary_phone, customer_email, service_address, service_address_2, city, region, state, zip_code, landmark, manual_brand, manual_appliance_type, model_number, serial_number, product_model_version, issue_description, special_request, preferred_date, preferred_time, purchase_date, warranty_type, job_status_id, verification_status, verification_reject_reason, verification_notes, sync_status, sync_error, last_synced_at, requested_at, updated_at, brand:brands(name, legacy_id), appliance_type:appliance_types(name, legacy_id), job_status:job_statuses(status_name, color_code, legacy_id)',
+        'id, legacy_id, customer_id, request_number, ticket_source, source_system, origin_type, er_ticket_id, full_name, phone_number, secondary_phone, customer_email, service_address, service_address_2, city, region, state, zip_code, landmark, manual_brand, manual_appliance_type, model_number, serial_number, product_model_version, issue_description, special_request, preferred_date, preferred_time, purchase_date, warranty_type, job_status_id, verification_status, verification_reject_reason, verification_notes, verification_reviewed_by, sync_status, sync_error, last_synced_at, requested_at, updated_at, brand:brands(name, legacy_id), appliance_type:appliance_types(name, legacy_id), job_status:job_statuses(status_name, color_code, legacy_id)',
       )
       .order('requested_at', { ascending: false })
       .limit(limit);

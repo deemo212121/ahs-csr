@@ -370,6 +370,7 @@ function mapPortalRequest(row: PortalTicketRequestRow): ServiceRequest {
     verification_status: verificationStatus(row.verification_status),
     verification_reject_reason: nullableText(row.verification_reject_reason),
     verification_notes: nullableText(row.verification_notes),
+    verification_reviewed_by: nullableText(row.verification_reviewed_by),
     sync_status: nullableText(row.er_ticket_id) || nullableText(row.er_ticket_no)
       ? 'synced_to_er'
       : verificationStatus(row.verification_status) === 'approved'

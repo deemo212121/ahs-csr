@@ -5,7 +5,6 @@ import {
   Activity,
   CalendarDays,
   Check,
-  ChevronDown,
   Clock3,
   ClipboardPlus,
   FileAudio,
@@ -25,11 +24,9 @@ import { fetchJsonWithFirebase } from '@/lib/auth/client';
 import type { RtcCall, RtcCallListResponse, RtcCallStatus } from '@/lib/calls/types';
 import { WebRtcCallRoom } from '@/components/calls/WebRtcCallRoom';
 import { useLiveUpdate } from '@/lib/notifications/useLiveUpdate';
-
-type ServiceAreasResponse = {
-  service_areas?: Array<{ region?: string | null; location?: string | null }>;
-  locations?: Array<{ location?: string | null }>;
-};
+import { BRANCHES } from '@/lib/branches';
+import { BranchCheckboxDropdown } from '@/components/BranchCheckboxDropdown';
+import { useBranchFilter } from '@/lib/useBranchFilter';
 
 const statusOptions: Array<{ value: 'open' | RtcCallStatus | 'history'; label: string }> = [
   { value: 'open', label: 'Open calls' },
@@ -62,10 +59,6 @@ function roleHeadline(role: string | null) {
   if (role === 'team_leader') return { title: 'Team Web Calls', subtitle: 'Monitor branch demand, claim urgent calls, and support CSR agents when the queue spikes.' };
   if (role === 'csr_manager') return { title: 'Manager Call Command', subtitle: 'Live customer call queue with branch routing, staff claim history, and WebRTC audio rooms.' };
   return { title: 'CSR Web Call Desk', subtitle: 'Answer customer web calls, filter by branch, and keep the queue moving.' };
-}
-
-function cleanBranch(value?: string | null) {
-  return value?.trim() || '';
 }
 
 type QuickManualForm = {
@@ -358,11 +351,8 @@ export function CallsPage() {
   const { user, role } = useAuth();
   const [calls, setCalls] = useState<RtcCall[]>([]);
   const [historyCalls, setHistoryCalls] = useState<RtcCall[]>([]);
-  const [branches, setBranches] = useState<string[]>([]);
-  const [selectedBranches, setSelectedBranches] = useState<string[]>([]);
   const [status, setStatus] = useState<'open' | RtcCallStatus | 'history'>('open');
   const [search, setSearch] = useState('');
-  const [branchMenuOpen, setBranchMenuOpen] = useState(false);
   const [activeCall, setActiveCall] = useState<RtcCall | null>(null);
   const [detailCall, setDetailCall] = useState<RtcCall | null>(null);
   const [manualOpen, setManualOpen] = useState(false);
@@ -370,6 +360,13 @@ export function CallsPage() {
   const [historyLoading, setHistoryLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [lastLoadedAt, setLastLoadedAt] = useState<string | null>(null);
+  const [historyNameFilter, setHistoryNameFilter] = useState('');
+  const [historyCsrFilter, setHistoryCsrFilter] = useState('');
+  const [historyStartDate, setHistoryStartDate] = useState('');
+  const [historyEndDate, setHistoryEndDate] = useState('');
+
+  const branchOptions = useMemo(() => [...BRANCHES], []);
+  const { selectedBranches, setSelectedBranches } = useBranchFilter();
 
   const copy = roleHeadline(role);
 
@@ -386,7 +383,6 @@ export function CallsPage() {
       );
       if (data.setup_required) throw new Error(data.message || 'Web call queue setup is missing.');
       setCalls(data.calls);
-      setBranches((current) => Array.from(new Set([...current, ...data.branches])).sort((a, b) => a.localeCompare(b)));
       setLastLoadedAt(new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', second: '2-digit' }));
       setActiveCall((current) => current ? data.calls.find((call) => call.id === current.id) ?? current : current);
       setDetailCall((current) => current ? data.calls.find((call) => call.id === current.id) ?? current : current);
@@ -412,30 +408,10 @@ export function CallsPage() {
     }
   }, [user]);
 
-  const loadBranches = useCallback(async () => {
-    try {
-      const response = await fetch('/api/service-areas?limit=15000', { cache: 'no-store' });
-      const data = (await response.json()) as ServiceAreasResponse;
-      const next = new Set<string>();
-      data.service_areas?.forEach((area) => {
-        const branch = cleanBranch(area.location || area.region);
-        if (branch) next.add(branch);
-      });
-      data.locations?.forEach((location) => {
-        const branch = cleanBranch(location.location);
-        if (branch) next.add(branch);
-      });
-      setBranches((current) => Array.from(new Set([...current, ...next])).sort((a, b) => a.localeCompare(b)));
-    } catch {
-      // Calls still work; branch options can come from loaded calls.
-    }
-  }, []);
-
   useEffect(() => {
     void loadCalls();
     void loadCallHistory();
-    void loadBranches();
-  }, [loadBranches, loadCallHistory, loadCalls]);
+  }, [loadCallHistory, loadCalls]);
 
   useLiveUpdate('calls', () => { void loadCalls(true); });
 
@@ -467,7 +443,7 @@ export function CallsPage() {
   const filteredCalls = useMemo(() => {
     const query = search.trim().toLowerCase();
     return calls.filter((call) => {
-      if (selectedBranches.length && !selectedBranches.includes(call.branch || '')) return false;
+      if (!selectedBranches.length || !selectedBranches.includes(call.branch || '')) return false;
       if (!query) return true;
       return [
         call.customer_name,
@@ -486,6 +462,25 @@ export function CallsPage() {
         .includes(query);
     });
   }, [calls, search, selectedBranches]);
+
+  const filteredHistoryCalls = useMemo(() => {
+    const nameQuery = historyNameFilter.trim().toLowerCase();
+    const csrQuery = historyCsrFilter.trim().toLowerCase();
+    const startTime = historyStartDate ? new Date(`${historyStartDate}T00:00:00`).getTime() : null;
+    const endTime = historyEndDate ? new Date(`${historyEndDate}T23:59:59.999`).getTime() : null;
+    return historyCalls.filter((call) => {
+      if (nameQuery && !(call.customer_name || '').toLowerCase().includes(nameQuery)) return false;
+      if (csrQuery && !(call.accepted_by_name || '').toLowerCase().includes(csrQuery)) return false;
+      if (!selectedBranches.length || !selectedBranches.includes(call.branch || '')) return false;
+      if (startTime !== null || endTime !== null) {
+        const queuedTime = call.queued_at ? new Date(call.queued_at).getTime() : NaN;
+        if (Number.isNaN(queuedTime)) return false;
+        if (startTime !== null && queuedTime < startTime) return false;
+        if (endTime !== null && queuedTime > endTime) return false;
+      }
+      return true;
+    });
+  }, [historyCalls, historyNameFilter, historyCsrFilter, selectedBranches, historyStartDate, historyEndDate]);
 
   const handleCallEnded = useCallback(() => {
     setActiveCall(null);
@@ -506,12 +501,6 @@ export function CallsPage() {
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to accept call.');
     }
-  }
-
-  function toggleBranch(branch: string) {
-    setSelectedBranches((current) =>
-      current.includes(branch) ? current.filter((item) => item !== branch) : [...current, branch],
-    );
   }
 
   return (
@@ -557,30 +546,7 @@ export function CallsPage() {
                 {statusOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
               </select>
             </div>
-            <div className="branch-multi-select">
-              <button onClick={() => setBranchMenuOpen((value) => !value)} type="button">
-                <MapPin size={15} />
-                {selectedBranches.length ? `${selectedBranches.length} branches` : 'All branches'}
-                <ChevronDown size={15} />
-              </button>
-              {branchMenuOpen ? (
-                <div className="branch-multi-menu">
-                  <div className="branch-multi-actions">
-                    <button onClick={() => setSelectedBranches(branches)} type="button">All</button>
-                    <button onClick={() => setSelectedBranches([])} type="button">Clear</button>
-                  </div>
-                  <div className="branch-check-list">
-                    {branches.map((branch) => (
-                      <label key={branch}>
-                        <input checked={selectedBranches.includes(branch)} onChange={() => toggleBranch(branch)} type="checkbox" />
-                        <span>{branch}</span>
-                      </label>
-                    ))}
-                    {!branches.length ? <p>No branches loaded yet.</p> : null}
-                  </div>
-                </div>
-              ) : null}
-            </div>
+            <BranchCheckboxDropdown branches={branchOptions} label="" selectedBranches={selectedBranches} onChange={setSelectedBranches} />
           </div>
 
           <div className="call-queue-headline">
@@ -669,6 +635,60 @@ export function CallsPage() {
           </div>
         </div>
 
+        <div className="call-history-toolbar">
+          <div className="call-search-box">
+            <Search size={16} />
+            <input
+              value={historyNameFilter}
+              onChange={(event) => setHistoryNameFilter(event.target.value)}
+              placeholder="Filter by customer name..."
+            />
+          </div>
+          <div className="call-search-box">
+            <UserCheck size={16} />
+            <input
+              value={historyCsrFilter}
+              onChange={(event) => setHistoryCsrFilter(event.target.value)}
+              placeholder="Filter by CSR name..."
+            />
+          </div>
+          <div className="call-date-range">
+            <label>
+              <CalendarDays size={15} />
+              <input
+                type="date"
+                value={historyStartDate}
+                max={historyEndDate || undefined}
+                onChange={(event) => setHistoryStartDate(event.target.value)}
+              />
+            </label>
+            <span>to</span>
+            <label>
+              <input
+                type="date"
+                value={historyEndDate}
+                min={historyStartDate || undefined}
+                onChange={(event) => setHistoryEndDate(event.target.value)}
+              />
+            </label>
+          </div>
+          {historyNameFilter || historyCsrFilter || historyStartDate || historyEndDate ? (
+            <button
+              className="call-ghost-btn"
+              onClick={() => {
+                setHistoryNameFilter('');
+                setHistoryCsrFilter('');
+                setHistoryStartDate('');
+                setHistoryEndDate('');
+              }}
+              type="button"
+            >
+              <X size={16} />
+              Clear filters
+            </button>
+          ) : null}
+        </div>
+
         <div className="call-history-list">
           {historyLoading ? <div className="call-empty-state">Loading call history...</div> : null}
           {!historyLoading && !historyCalls.length ? (
@@ -678,7 +698,13 @@ export function CallsPage() {
               <p>Completed, cancelled, missed, and active calls will appear here.</p>
             </div>
           ) : null}
-          {historyCalls.map((call) => (
+          {!historyLoading && historyCalls.length && !filteredHistoryCalls.length ? (
+            <div className="call-empty-state">
+              <Clock3 size={28} />
+              <strong>No calls match the current filters.</strong>
+            </div>
+          ) : null}
+          {filteredHistoryCalls.map((call) => (
             <button className="call-history-row" key={call.id} onClick={() => setDetailCall(call)} type="button">
               <span className={`call-status-dot ${call.status}`} />
               <div>
