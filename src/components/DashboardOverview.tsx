@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useLiveUpdate } from '@/lib/notifications/useLiveUpdate';
 import { fetchJsonWithFirebase } from '@/lib/auth/client';
 import { useAuth } from '@/components/AuthProvider';
 import { RequestTable } from '@/components/RequestTable';
@@ -33,6 +34,8 @@ export function DashboardOverview({ title }: { title: string }) {
   useEffect(() => {
     void load();
   }, [user]);
+
+  useLiveUpdate(['verify', 'calls', 'messages'], () => { void load(); });
 
   const pending = requests.filter((request) => request.verification_status === 'pending').length;
   const approved = requests.filter((request) => request.verification_status === 'approved').length;

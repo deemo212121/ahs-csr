@@ -24,6 +24,7 @@ import { useAuth } from '@/components/AuthProvider';
 import { fetchJsonWithFirebase } from '@/lib/auth/client';
 import type { RtcCall, RtcCallListResponse, RtcCallStatus } from '@/lib/calls/types';
 import { WebRtcCallRoom } from '@/components/calls/WebRtcCallRoom';
+import { useLiveUpdate } from '@/lib/notifications/useLiveUpdate';
 
 type ServiceAreasResponse = {
   service_areas?: Array<{ region?: string | null; location?: string | null }>;
@@ -435,6 +436,8 @@ export function CallsPage() {
     void loadCallHistory();
     void loadBranches();
   }, [loadBranches, loadCallHistory, loadCalls]);
+
+  useLiveUpdate('calls', () => { void loadCalls(true); });
 
   useEffect(() => {
     const timer = window.setInterval(() => void loadCalls(true), activeCall ? 15000 : 8000);

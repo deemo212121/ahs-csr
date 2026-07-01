@@ -4,6 +4,7 @@ import { getAuthContext, requireRole } from '@/lib/auth/server';
 import { getErSupabaseAdmin, isErSupabaseConfigured } from '@/lib/supabase/er-admin';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import type { RtcCall, RtcCallStatus } from '@/lib/calls/types';
+import { NOTIFY_CHANNELS, pingChannel } from '@/lib/notifications/broadcast';
 
 const openCallStatuses: RtcCallStatus[] = ['manager_queue', 'assigned', 'accepted'];
 
@@ -349,6 +350,7 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (error) throw new Error(error.message);
+    await pingChannel(NOTIFY_CHANNELS.calls);
     return NextResponse.json({ call: mapCallRow(data), reused: false }, { status: 201 });
   } catch (error) {
     const setupMessage = missingCallSchemaMessage(error);

@@ -2,6 +2,7 @@
 
 import { CheckCircle2, ListFilter, ShieldCheck, X, XCircle } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
+import { useLiveUpdate } from '@/lib/notifications/useLiveUpdate';
 import { fetchJsonWithFirebase } from '@/lib/auth/client';
 import { useAuth } from '@/components/AuthProvider';
 import type { ServiceRequest } from '@/lib/types';
@@ -254,6 +255,8 @@ export function VerificationQueue() {
   useEffect(() => {
     void load();
   }, [user]);
+
+  useLiveUpdate('verify', () => { void load(); });
 
   const regions = useMemo(() => {
     const list = Array.from(new Set(pendingRequests.map((request) => request.region).filter(Boolean) as string[]));

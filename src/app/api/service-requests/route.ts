@@ -5,6 +5,7 @@ import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { createErModePortalRequest, listCustomerLinkedErTickets, listErModeRequests, listErTicketsViewOnly, useErTicketDatabase } from '@/lib/er-ticket-database';
 import { isErSupabaseConfigured } from '@/lib/supabase/er-admin';
 import { ensureErPortalRequestMessageThread, ensureTicketMessageThread } from '@/lib/messages';
+import { NOTIFY_CHANNELS, pingChannel } from '@/lib/notifications/broadcast';
 
 const createRequestSchema = z.object({
   request_number: z.string().optional(),
@@ -164,6 +165,7 @@ export async function POST(request: NextRequest) {
       if (context.role !== 'customer') {
         await ensureErPortalRequestMessageThread(getSupabaseAdmin(), requestRecord);
       }
+      if (context.role === 'customer') await pingChannel(NOTIFY_CHANNELS.verify);
       return NextResponse.json({ request: requestRecord }, { status: 201 });
     }
 
@@ -215,6 +217,8 @@ export async function POST(request: NextRequest) {
 
     if (!isCustomer) {
       await ensureTicketMessageThread(supabaseAdmin, data.id);
+    } else {
+      await pingChannel(NOTIFY_CHANNELS.verify);
     }
 
     return NextResponse.json({ request: data }, { status: 201 });

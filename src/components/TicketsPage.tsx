@@ -3,6 +3,7 @@
 import { ListFilter, Plus, RefreshCw, Search, Ticket } from 'lucide-react';
 import Link from 'next/link';
 import { useMemo, useState } from 'react';
+import { useLiveUpdate } from '@/lib/notifications/useLiveUpdate';
 import { useLeadershipRequests } from '@/components/leadership/useLeadershipRequests';
 import { BranchCheckboxDropdown } from '@/components/BranchCheckboxDropdown';
 import { ErTicketListTable } from '@/components/ErTicketListTable';
@@ -13,6 +14,7 @@ export function TicketsPage() {
   const { requests, loading, error, refresh } = useLeadershipRequests(500, 'view=tickets');
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState('all');
+  useLiveUpdate('verify', () => { void refresh(); });
 
   const branchOptions = useMemo(() => uniqueSorted(requests.map(erLocationText)), [requests]);
   const { selectedBranches, setSelectedBranches } = usePersistentBranchFilter('ahs-manager-ticket-branches', branchOptions);

@@ -30,6 +30,16 @@ import {
 } from "lucide-react";
 import { useAuth } from "@/components/AuthProvider";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { NotificationToastStack } from "@/components/NotificationToastStack";
+import { NotificationSettings } from "@/components/NotificationSettings";
+import { RealtimeStatus } from "@/components/RealtimeStatus";
+import { useNotificationFeed } from "@/lib/notifications/useNotificationFeed";
+import { useNotificationHistory } from "@/lib/notifications/useNotificationHistory";
+import { useToastQueue } from "@/lib/notifications/useToastQueue";
+import { playNotificationSound } from "@/lib/notifications/sounds";
+import { dispatchLiveUpdate } from "@/lib/notifications/useLiveUpdate";
+import { getNotificationSettings } from "@/lib/notifications/settings";
+import type { NotificationCategory } from "@/lib/notifications/settings";
 import type { AppRole } from "@/lib/types";
 
 type NavItem = { href: string; label: string; icon: React.ReactNode };
@@ -289,40 +299,90 @@ export function PortalShell({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
-  const { profile, role, logout } = useAuth();
+  const { profile, role, logout, user } = useAuth();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [userOpen, setUserOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
-  const [notificationCount, setNotificationCount] = useState(0);
   const nav = role ? navByRole[role] : [];
   const isCustomerPortal = role === "customer";
   const isAgentPortal =
     role === "csr" || role === "team_leader" || role === "csr_manager";
 
-  const notificationKey = useMemo(() => {
-    if (!role || !profile?.id) return null;
-    return `portal-notifications-read-${role}-${profile.id}`;
-  }, [profile?.id, role]);
+  const base = useMemo(() => getRoleBase(role), [role]);
 
+  const toastQueue = useToastQueue(3);
+  const notifHistory = useNotificationHistory(base);
+
+  // Reactively read notification settings so region filter updates take effect
+  // immediately without requiring a page reload.
+  const [notifSettings, setNotifSettings] = useState(getNotificationSettings);
   useEffect(() => {
-    if (!notificationKey) {
-      setNotificationCount(0);
-      return;
+    function onSettingsChanged(e: Event) {
+      setNotifSettings((e as CustomEvent).detail);
     }
+    window.addEventListener('ushs-notification-settings-changed', onSettingsChanged);
+    return () => window.removeEventListener('ushs-notification-settings-changed', onSettingsChanged);
+  }, []);
+  const regionFilter = notifSettings.filterRegions;
 
-    const wasRead = window.localStorage.getItem(notificationKey) === "true";
-    setNotificationCount(wasRead ? 0 : isAgentPortal ? 4 : 0);
-  }, [isAgentPortal, notificationKey]);
+  function onArrival(category: NotificationCategory) {
+    playNotificationSound(category);
+    toastQueue.push(category);
+    notifHistory.addRecord(category);
+    dispatchLiveUpdate(category);
+  }
+
+  const verifyFeed = useNotificationFeed("verify", user, {
+    enabled: isAgentPortal,
+    onNewArrival: () => onArrival("verify"),
+    onItemsProcessed: () => playNotificationSound("verify"),
+    regionFilter,
+  });
+  const messagesFeed = useNotificationFeed("messages", user, {
+    enabled: isAgentPortal,
+    onNewArrival: () => onArrival("messages"),
+  });
+  const callsFeed = useNotificationFeed("calls", user, {
+    enabled: isAgentPortal,
+    onNewArrival: () => onArrival("calls"),
+    regionFilter,
+  });
+
+  const liveNotificationCount = verifyFeed.count + messagesFeed.count + callsFeed.count;
+
+  const availableRegions = useMemo(() => {
+    const all = [...verifyFeed.items, ...callsFeed.items]
+      .map((item) => item.region)
+      .filter((r): r is string => Boolean(r));
+    return [...new Set(all)].sort();
+  }, [verifyFeed.items, callsFeed.items]);
+
+  function badgeFor(href: string): number {
+    if (href.includes("/verification")) return verifyFeed.count;
+    if (href.includes("/messages")) return messagesFeed.count;
+    if (href.includes("/calls")) return callsFeed.count;
+    return 0;
+  }
+
+  function pulseFor(href: string): boolean {
+    if (href.includes("/verification")) return verifyFeed.justArrived;
+    if (href.includes("/messages")) return messagesFeed.justArrived;
+    if (href.includes("/calls")) return callsFeed.justArrived;
+    return false;
+  }
+
+  function markReadFor(href: string) {
+    if (href.includes("/verification")) verifyFeed.markRead();
+    if (href.includes("/messages")) messagesFeed.markRead();
+    if (href.includes("/calls")) callsFeed.markRead();
+  }
 
   function handleNotificationsClick() {
-    setNotificationsOpen((value) => !value);
+    const next = !notificationsOpen;
+    setNotificationsOpen(next);
     setUserOpen(false);
-    setNotificationCount(0);
-    if (notificationKey) {
-      window.localStorage.setItem(notificationKey, "true");
-    }
+    if (next) notifHistory.markAllRead();
   }
-  const base = getRoleBase(role);
   const displayName =
     [profile?.first_name, profile?.last_name].filter(Boolean).join(" ") ||
     profile?.email ||
@@ -365,16 +425,26 @@ export function PortalShell({
             <span>{brandLabel}</span>
           </div>
           <nav className="nav-list">
-            {nav.map((item) => (
-              <Link
-                className={`nav-item ${pathname === item.href || pathname.startsWith(`${item.href}/`) ? "active" : ""}`}
-                href={item.href}
-                key={item.href}
-              >
-                {item.icon}
-                {item.label}
-              </Link>
-            ))}
+            {nav.map((item) => {
+              const badge = badgeFor(item.href);
+              const pulse = pulseFor(item.href);
+              return (
+                <Link
+                  className={`nav-item ${pathname === item.href || pathname.startsWith(`${item.href}/`) ? "active" : ""}`}
+                  href={item.href}
+                  key={item.href}
+                  onClick={() => markReadFor(item.href)}
+                >
+                  {item.icon}
+                  {item.label}
+                  {badge > 0 ? (
+                    <span className={`nav-badge${pulse ? " nav-badge--pulse" : ""}`}>
+                      {badge > 9 ? "9+" : badge}
+                    </span>
+                  ) : null}
+                </Link>
+              );
+            })}
           </nav>
         </aside>
       ) : null}
@@ -411,22 +481,31 @@ export function PortalShell({
               </button>
             </div>
             <nav className="agent-side-nav">
-              {drawerLinks.map((item) => (
-                <Link
-                  className={
-                    pathname === item.href ||
-                    pathname.startsWith(`${item.href}/`)
-                      ? "active"
-                      : ""
-                  }
-                  href={item.href}
-                  key={item.href}
-                  onClick={() => setDrawerOpen(false)}
-                >
-                  {item.icon}
-                  {item.label}
-                </Link>
-              ))}
+              {drawerLinks.map((item) => {
+                const badge = badgeFor(item.href);
+                const pulse = pulseFor(item.href);
+                return (
+                  <Link
+                    className={
+                      pathname === item.href ||
+                      pathname.startsWith(`${item.href}/`)
+                        ? "active"
+                        : ""
+                    }
+                    href={item.href}
+                    key={item.href}
+                    onClick={() => { setDrawerOpen(false); markReadFor(item.href); }}
+                  >
+                    {item.icon}
+                    {item.label}
+                    {badge > 0 ? (
+                      <span className={`nav-badge nav-badge--drawer${pulse ? " nav-badge--pulse" : ""}`}>
+                        {badge > 9 ? "9+" : badge}
+                      </span>
+                    ) : null}
+                  </Link>
+                );
+              })}
               <button
                 className="agent-side-logout"
                 onClick={logout}
@@ -560,7 +639,9 @@ export function PortalShell({
               <strong>{title}</strong>
             )}
             <div className="button-row agent-header-actions">
+              {isAgentPortal ? <RealtimeStatus /> : null}
               <ThemeToggle />
+              {isAgentPortal ? <NotificationSettings availableRegions={availableRegions} /> : null}
               {isAgentPortal ? (
                 <>
                   <div className="agent-popover-anchor">
@@ -571,7 +652,7 @@ export function PortalShell({
                       type="button"
                     >
                       <Bell size={16} />
-                      {notificationCount > 0 ? <span className="agent-dot">{notificationCount}</span> : null}
+                      {liveNotificationCount > 0 ? <span className="agent-dot">{liveNotificationCount > 9 ? "9+" : liveNotificationCount}</span> : null}
                     </button>
                     {notificationsOpen ? (
                       <div className="agent-notification-panel">
@@ -579,37 +660,59 @@ export function PortalShell({
                           <strong>Notifications</strong>
                           <Link href={`${base}/announcements`}>View all</Link>
                         </div>
-                        {[
-                          [
-                            "New Service Request",
-                            "New request #SRV-20260616-5940 from Customer NumberOne (Normal)",
-                          ],
-                          [
-                            "New Request Needs Verification",
-                            "Customer request #SRV-20260616-5940 is waiting in the Verification Queue.",
-                          ],
-                          [
-                            "New Service Request",
-                            "New request #SRV-20260615-2005 from Bubble Max (Normal)",
-                          ],
-                          [
-                            "New Request Needs Verification",
-                            "Customer request #SRV-20260615-2005 is waiting in the Verification Queue.",
-                          ],
-                        ].map(([heading, body]) => (
-                          <div
-                            className="agent-notification-item"
-                            key={`${heading}-${body}`}
-                          >
-                            <span>
-                              <Bell size={14} />
-                            </span>
-                            <div>
-                              <strong>{heading}</strong>
-                              <p>{body}</p>
-                            </div>
+                        {notifHistory.records.length > 0 ? (
+                          notifHistory.records.map((record) => (
+                            <Link
+                              className={`agent-notification-item agent-notification-item--link${record.isRead ? "" : " agent-notification-item--unread"}`}
+                              href={record.href}
+                              key={record.id}
+                              onClick={() => { notifHistory.markOneRead(record.id); setNotificationsOpen(false); }}
+                            >
+                              <span className="agent-notification-icon">{record.icon}</span>
+                              <div>
+                                <strong>{record.title}</strong>
+                                <p>{record.body}</p>
+                              </div>
+                              {!record.isRead ? <span className="agent-notification-dot" /> : null}
+                            </Link>
+                          ))
+                        ) : verifyFeed.count > 0 || callsFeed.count > 0 ? (
+                          <>
+                            {verifyFeed.count > 0 ? (
+                              <Link
+                                className="agent-notification-item agent-notification-item--link agent-notification-item--unread"
+                                href={`${base}/verification`}
+                                onClick={() => { verifyFeed.markRead(); setNotificationsOpen(false); }}
+                              >
+                                <span className="agent-notification-icon">✅</span>
+                                <div>
+                                  <strong>{verifyFeed.count} ticket{verifyFeed.count !== 1 ? 's' : ''} pending verification</strong>
+                                  <p>Open the Verification Queue to review.</p>
+                                </div>
+                                <span className="agent-notification-dot" />
+                              </Link>
+                            ) : null}
+                            {callsFeed.count > 0 ? (
+                              <Link
+                                className="agent-notification-item agent-notification-item--link agent-notification-item--unread"
+                                href={`${base}/calls`}
+                                onClick={() => { callsFeed.markRead(); setNotificationsOpen(false); }}
+                              >
+                                <span className="agent-notification-icon">📞</span>
+                                <div>
+                                  <strong>{callsFeed.count} call{callsFeed.count !== 1 ? 's' : ''} in queue</strong>
+                                  <p>A customer is waiting in the call queue.</p>
+                                </div>
+                                <span className="agent-notification-dot" />
+                              </Link>
+                            ) : null}
+                          </>
+                        ) : (
+                          <div className="agent-notification-empty">
+                            <Bell size={20} />
+                            <p>No new notifications</p>
                           </div>
-                        ))}
+                        )}
                       </div>
                     ) : null}
                   </div>
@@ -676,6 +779,18 @@ export function PortalShell({
             </div>
           </header>
         )}
+        {isAgentPortal ? (
+          <NotificationToastStack
+            basePath={base}
+            onDismiss={toastQueue.dismiss}
+            onMarkRead={(cat: NotificationCategory) => {
+              if (cat === "verify") verifyFeed.markRead();
+              if (cat === "messages") messagesFeed.markRead();
+              if (cat === "calls") callsFeed.markRead();
+            }}
+            toasts={toastQueue.visible}
+          />
+        ) : null}
         <div className="page">{children}</div>
         {isCustomerPortal ? (
           <nav

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { getAuthContext, requireRole, type AuthContext } from '@/lib/auth/server';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
+import { NOTIFY_CHANNELS, pingChannel } from '@/lib/notifications/broadcast';
 
 const callSelect = `
   id,
@@ -135,6 +136,7 @@ export async function PATCH(
 
     if (error) throw new Error(error.message);
 
+    if (body.action === 'accept') await pingChannel(NOTIFY_CHANNELS.calls);
     return NextResponse.json({ call: data });
   } catch (error) {
     const setupMessage = missingCallSchemaMessage(error);

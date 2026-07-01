@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { getAuthContext, requireRole } from '@/lib/auth/server';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { createTicketMessage, getThreadMessages } from '@/lib/messages';
+import { NOTIFY_CHANNELS, pingChannel } from '@/lib/notifications/broadcast';
 
 const messageSchema = z.object({
   message: z.string().min(1).max(4000),
@@ -38,6 +39,7 @@ export async function POST(
     const { threadId } = await context.params;
     const body = messageSchema.parse(await request.json());
     const message = await createTicketMessage(getSupabaseAdmin(), auth, threadId, body.message);
+    await pingChannel(NOTIFY_CHANNELS.messages);
     return NextResponse.json({ message }, { status: 201 });
   } catch (error) {
     return NextResponse.json(

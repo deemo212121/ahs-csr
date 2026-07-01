@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { getAuthContext, localProfileId, requireRole } from '@/lib/auth/server';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { syncApprovedRequestToEr } from '@/lib/er-sync';
+import { NOTIFY_CHANNELS, pingChannel } from '@/lib/notifications/broadcast';
 import { reviewErModePortalRequest, useErTicketDatabase } from '@/lib/er-ticket-database';
 import { ensureErPortalRequestMessageThread, ensureTicketMessageThread } from '@/lib/messages';
 
@@ -33,6 +34,7 @@ export async function POST(
         const supabaseAdmin = getSupabaseAdmin();
         await ensureErPortalRequestMessageThread(supabaseAdmin, result.request);
       }
+      await pingChannel(NOTIFY_CHANNELS.verify);
       return NextResponse.json(result);
     }
 
@@ -95,6 +97,7 @@ export async function POST(
       .eq('id', id)
       .single();
 
+    await pingChannel(NOTIFY_CHANNELS.verify);
     return NextResponse.json({
       request: refreshedRequest ?? data,
       sync: syncResult,
