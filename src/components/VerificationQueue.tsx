@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useLiveUpdate } from '@/lib/notifications/useLiveUpdate';
 import { fetchJsonWithFirebase } from '@/lib/auth/client';
 import { useAuth } from '@/components/AuthProvider';
+import { StickyHorizontalScroll } from '@/components/StickyHorizontalScroll';
 import type { ServiceRequest } from '@/lib/types';
 import { BRANCHES } from '@/lib/branches';
 import { BranchCheckboxDropdown } from '@/components/BranchCheckboxDropdown';
@@ -369,7 +370,7 @@ export function VerificationQueue() {
       </section>
 
       <section className="manager-table-panel flush">
-        <div className="manager-table-wrap er-ticket-table-scroll verification-table-scroll">
+        <StickyHorizontalScroll className="manager-table-wrap er-ticket-table-scroll verification-table-scroll">
           <table className="manager-data-table manager-verification-table er-ticket-list-table detailed-verification-table">
             <thead>
               <tr>
@@ -432,7 +433,7 @@ export function VerificationQueue() {
               {!visible.length ? <tr><td colSpan={19} className="manager-empty-cell">{loading ? 'Loading verification queue...' : 'No pending verification requests found.'}</td></tr> : null}
             </tbody>
           </table>
-        </div>
+        </StickyHorizontalScroll>
       </section>
 
       {selectedRequest ? (

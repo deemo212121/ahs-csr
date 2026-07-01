@@ -9000,17 +9000,26 @@ h1, h2, h3, h4, h5, h6,
 }
 
 .detailed-verification-table {
-  min-width: 1900px;
+  min-width: 1420px;
+  table-layout: auto;
+  width: auto;
+}
+
+.detailed-verification-table th,
+.detailed-verification-table td {
+  width: 1%;
+  white-space: nowrap;
 }
 
 .detailed-verification-table td:nth-child(5),
 .detailed-verification-table td:nth-child(7) {
-  min-width: 150px;
+  min-width: 140px;
   white-space: normal;
 }
 
 .detailed-verification-table td:nth-child(19) {
-  min-width: 130px;
+  min-width: 120px;
+  white-space: normal;
 }
 
 .verification-modal-actions {
@@ -9365,6 +9374,89 @@ h1, h2, h3, h4, h5, h6,
 .er-ticket-list-table td:nth-child(9) {
   white-space: normal;
   min-width: 130px;
+}
+
+/* Compact layout for the CSR Tickets and Verification Queue tables. */
+.er-ticket-table-scroll,
+.verification-table-scroll {
+  padding: 0 12px 12px;
+}
+
+/* These two wrappers get a mirrored sticky scrollbar (see .sticky-hscroll-bar
+   below), so their own native horizontal scrollbar is hidden to avoid a
+   confusing duplicate. */
+.er-ticket-table-scroll,
+.verification-table-scroll {
+  scrollbar-width: none;
+}
+
+.er-ticket-table-scroll::-webkit-scrollbar,
+.verification-table-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+.er-ticket-list-table th {
+  font-size: 0.68rem;
+  padding: 7px 9px;
+}
+
+.er-ticket-list-table td {
+  font-size: 0.76rem;
+  line-height: 1.2;
+  padding: 5px 9px;
+}
+
+.er-ticket-list-table .manager-status-pill,
+.er-ticket-list-table .manager-date-pill,
+.er-ticket-list-table .manager-area-pill {
+  font-size: 0.7rem;
+  min-height: 22px;
+  padding: 3px 9px;
+}
+
+.er-ticket-list-table .er-ticket-no-button {
+  font-size: 0.76rem;
+  padding: 0;
+}
+
+/* Sticky horizontal scrollbar that stays pinned to the viewport bottom so
+   users don't need to scroll to the end of a tall table to find it. */
+.sticky-hscroll-outer {
+  position: relative;
+}
+
+.sticky-hscroll-bar {
+  bottom: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  position: sticky;
+  z-index: 5;
+}
+
+.sticky-hscroll-bar,
+.sticky-hscroll-bar::-webkit-scrollbar {
+  height: 12px;
+}
+
+.sticky-hscroll-bar::-webkit-scrollbar-track {
+  background: rgba(15, 23, 42, 0.5);
+}
+
+.sticky-hscroll-bar::-webkit-scrollbar-thumb {
+  background: rgba(96, 165, 250, 0.45);
+  border-radius: 8px;
+}
+
+.sticky-hscroll-ghost {
+  height: 1px;
+}
+
+html[data-theme="light"] .sticky-hscroll-bar::-webkit-scrollbar-track {
+  background: rgba(226, 232, 240, 0.7);
+}
+
+html[data-theme="light"] .sticky-hscroll-bar::-webkit-scrollbar-thumb {
+  background: rgba(14, 165, 233, 0.4);
 }
 
 /* Admin notifications dropdown */
@@ -12794,6 +12886,8 @@ html[data-theme="light"] .csr-summary-notes p {
 
   .csr-ticket-number-grid,
   .csr-agent-stat-grid,
+  .csr-dashboard-upgraded .agent-profile-grid,
+  .csr-dashboard-grid-redesigned,
   .csr-ticket-scope-panel {
     grid-template-columns: 1fr !important;
   }
@@ -12806,6 +12900,28 @@ html[data-theme="light"] .csr-summary-notes p {
   .csr-ticket-scope-note {
     margin-left: 0;
     max-width: none;
+  }
+}
+
+@media (max-width: 1200px) and (min-width: 901px) {
+  .csr-dashboard-upgraded .agent-profile-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+}
+
+@media (max-width: 520px) {
+  .csr-summary-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .csr-summary-modal {
+    max-height: 85vh;
+    padding: 16px;
+  }
+
+  .csr-verified-panel,
+  .csr-calls-panel {
+    padding: 14px !important;
   }
 }
 

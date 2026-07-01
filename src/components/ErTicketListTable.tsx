@@ -2,6 +2,7 @@
 
 import { X } from 'lucide-react';
 import { useMemo, useState } from 'react';
+import { StickyHorizontalScroll } from '@/components/StickyHorizontalScroll';
 import type { ServiceRequest } from '@/lib/types';
 
 type DetailValue = string | number | boolean | null | undefined;
@@ -210,7 +211,7 @@ export function ErTicketListTable({
 
   return (
     <>
-      <div className="er-ticket-table-scroll">
+      <StickyHorizontalScroll className="er-ticket-table-scroll">
         <table className="manager-data-table er-ticket-list-table">
           <thead>
             <tr>
@@ -278,7 +279,7 @@ export function ErTicketListTable({
             )}
           </tbody>
         </table>
-      </div>
+      </StickyHorizontalScroll>
       {selected ? <TicketDetailsModal request={selected} onClose={() => setSelected(null)} /> : null}
     </>
   );
