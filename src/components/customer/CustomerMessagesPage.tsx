@@ -47,11 +47,24 @@ type TicketThread = {
   er_ticket_id: string | null;
   subject: string;
   status: string;
+  ticket_status: string | null;
   last_message_at: string | null;
   created_at: string;
   request: ThreadRequest | null;
   latest_message: ThreadMessage | null;
 };
+
+const CLOSED_TICKET_STATUSES = new Set([
+  'cl-cancelled',
+  'cl-claimed',
+  'cl-data-closed',
+  'cl-ready to complete',
+  'cl-need cancel',
+]);
+
+function isThreadLocked(thread: TicketThread) {
+  return thread.status === 'closed' || CLOSED_TICKET_STATUSES.has((thread.ticket_status ?? '').trim().toLowerCase());
+}
 
 const quickReplies = [
   'Can I get an update on my schedule?',
@@ -240,28 +253,36 @@ export function CustomerMessagesPage() {
                   );
                 })}
               </div>
-              {messages.length <= 1 ? (
-                <div className="customer-quick-replies">
-                  <span>Quick message:</span>
-                  {quickReplies.map((reply) => (
-                    <button key={reply} onClick={() => setDraft(reply)} type="button">{reply}</button>
-                  ))}
+              {isThreadLocked(selectedThread) ? (
+                <div className="ticket-chat-closed-notice">
+                  This ticket is completed. Messaging is now closed.
                 </div>
-              ) : null}
-              <div className="customer-chat-compose">
-                <input
-                  onChange={(event) => setDraft(event.target.value)}
-                  onKeyDown={(event) => {
-                    if (event.key === 'Enter' && !event.shiftKey) {
-                      event.preventDefault();
-                      sendMessage();
-                    }
-                  }}
-                  placeholder="Type a message about this ticket..."
-                  value={draft}
-                />
-                <button className="btn btn-primary" disabled={!draft.trim()} onClick={() => sendMessage()} type="button"><Send size={16} /> Send</button>
-              </div>
+              ) : (
+                <>
+                  {messages.length <= 1 ? (
+                    <div className="customer-quick-replies">
+                      <span>Quick message:</span>
+                      {quickReplies.map((reply) => (
+                        <button key={reply} onClick={() => setDraft(reply)} type="button">{reply}</button>
+                      ))}
+                    </div>
+                  ) : null}
+                  <div className="customer-chat-compose">
+                    <input
+                      onChange={(event) => setDraft(event.target.value)}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter' && !event.shiftKey) {
+                          event.preventDefault();
+                          sendMessage();
+                        }
+                      }}
+                      placeholder="Type a message about this ticket..."
+                      value={draft}
+                    />
+                    <button className="btn btn-primary" disabled={!draft.trim()} onClick={() => sendMessage()} type="button"><Send size={16} /> Send</button>
+                  </div>
+                </>
+              )}
             </>
           ) : (
             <div className="customer-empty cx-chat-empty">

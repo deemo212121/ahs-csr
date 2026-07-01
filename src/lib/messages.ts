@@ -255,6 +255,18 @@ function auditValue(value?: string | null) {
   return cleanString(value) || 'not set';
 }
 
+const CLOSED_TICKET_STATUSES = new Set([
+  'cl-cancelled',
+  'cl-claimed',
+  'cl-data-closed',
+  'cl-ready to complete',
+  'cl-need cancel',
+]);
+
+function isClosedTicketStatus(status: string | null | undefined): boolean {
+  return CLOSED_TICKET_STATUSES.has((status ?? '').trim().toLowerCase());
+}
+
 function auditFieldLabel(field?: string | null) {
   const normalized = (field || '').trim().toLowerCase();
   if (normalized === 'status') return 'status';
@@ -631,6 +643,7 @@ export async function ensureErPortalRequestStaffThread(
   request: ServiceRequest,
 ): Promise<TicketMessageThread | null> {
   if (request.verification_status !== 'approved') return null;
+  if (isClosedTicketStatus(request.er_ticket?.status)) return null;
 
   const erTicketId = request.er_ticket_id || null;
   if (!erTicketId) return null;
@@ -874,14 +887,16 @@ async function ensureErTicketThreads(
       .map((t) => [t.er_ticket_id!, t]),
   );
 
-  // Separate into existing vs. new
+  // Separate into existing vs. new; track completed tickets whose threads should be closed
   const newInserts: ReturnType<typeof mapErTicketToThreadInsert>[] = [];
   const existingThreadsToProcess: Array<{ erTicketId: string; thread: TicketMessageThread }> = [];
+  const threadIdsToClose: string[] = [];
 
   for (const ticket of ticketRows) {
     const erTicketId = text(ticket.id);
     if (!erTicketId) continue;
 
+    const ticketClosed = isClosedTicketStatus(cleanString(ticket.status));
     const erCustomerId = cleanString(ticket.customer_id);
     const erCustomer = erCustomerId ? erCustomersById.get(erCustomerId) : undefined;
     const localCustomerId = auth.role === 'customer'
@@ -890,8 +905,12 @@ async function ensureErTicketThreads(
 
     const existing = existingByErTicketId.get(erTicketId);
     if (existing) {
+      if (ticketClosed && existing.status === 'open') {
+        threadIdsToClose.push(existing.id);
+      }
       existingThreadsToProcess.push({ erTicketId, thread: existing });
-    } else {
+    } else if (!ticketClosed) {
+      // Do not open a new thread for a ticket that is already completed/closed.
       newInserts.push(mapErTicketToThreadInsert(ticket, erCustomer, localCustomerId));
     }
   }
@@ -904,6 +923,14 @@ async function ensureErTicketThreads(
       .insert(newInserts)
       .select(threadSelect);
     newThreads = (created ?? []) as unknown as TicketMessageThread[];
+  }
+
+  // BATCH: close threads whose ER ticket has reached a completed/cancelled status
+  if (threadIdsToClose.length) {
+    await supabaseAdmin
+      .from('ticket_message_threads')
+      .update({ status: 'closed', updated_at: new Date().toISOString() })
+      .in('id', threadIdsToClose);
   }
 
   const allThreads = [
@@ -1065,12 +1092,17 @@ export async function listTicketMessageThreads(
   auth: AuthContext,
   limit = 80,
 ) {
-  await ensureApprovedTicketThreads(supabaseAdmin, auth);
+  // Local service_request threads are only relevant for the customer role.
+  // Skipping for staff avoids wasted subrequests in ER-mode deployments.
+  if (auth.role === 'customer') {
+    await ensureApprovedTicketThreads(supabaseAdmin, auth);
+  }
   await ensureErTicketThreads(supabaseAdmin, auth, limit);
 
   let query = supabaseAdmin
     .from('ticket_message_threads')
     .select(threadSelect)
+    .eq('status', 'open') // Only load active threads; closed/completed tickets are hidden by default
     .order('last_message_at', { ascending: false })
     .limit(limit);
 
@@ -1180,6 +1212,11 @@ export async function createTicketMessage(
   if (!trimmed) throw new Error('Message cannot be empty.');
 
   const thread = await getThreadForAccess(supabaseAdmin, auth, threadId);
+
+  if (thread.status === 'closed' || isClosedTicketStatus(thread.ticket_status)) {
+    throw new Error('This ticket is completed. Messaging is now closed.');
+  }
+
   const now = new Date().toISOString();
 
   const { data: message, error } = await supabaseAdmin

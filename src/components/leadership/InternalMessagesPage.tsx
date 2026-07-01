@@ -47,11 +47,24 @@ type TicketThread = {
   er_ticket_id: string | null;
   subject: string;
   status: string;
+  ticket_status: string | null;
   last_message_at: string | null;
   created_at: string;
   request: ThreadRequest | null;
   latest_message: ThreadMessage | null;
 };
+
+const CLOSED_TICKET_STATUSES = new Set([
+  'cl-cancelled',
+  'cl-claimed',
+  'cl-data-closed',
+  'cl-ready to complete',
+  'cl-need cancel',
+]);
+
+function isThreadLocked(thread: TicketThread) {
+  return thread.status === 'closed' || CLOSED_TICKET_STATUSES.has((thread.ticket_status ?? '').trim().toLowerCase());
+}
 
 function formatDate(value?: string | null) {
   if (!value) return 'No date yet';
@@ -255,23 +268,29 @@ export function InternalMessagesPage({
                   );
                 })}
               </div>
-              <div className="leadership-chat-compose ticket-chat-compose">
-                <input
-                  onChange={(event) => setDraft(event.target.value)}
-                  onKeyDown={(event) => {
-                    if (event.key === 'Enter' && !event.shiftKey) {
-                      event.preventDefault();
-                      sendMessage();
-                    }
-                  }}
-                  placeholder="Write a message to the customer..."
-                  type="text"
-                  value={draft}
-                />
-                <button className="btn btn-primary" disabled={!draft.trim()} onClick={sendMessage} type="button">
-                  <Send size={16} /> Send
-                </button>
-              </div>
+              {isThreadLocked(activeThread) ? (
+                <div className="ticket-chat-closed-notice">
+                  This ticket is completed. Messaging is now closed.
+                </div>
+              ) : (
+                <div className="leadership-chat-compose ticket-chat-compose">
+                  <input
+                    onChange={(event) => setDraft(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter' && !event.shiftKey) {
+                        event.preventDefault();
+                        sendMessage();
+                      }
+                    }}
+                    placeholder="Write a message to the customer..."
+                    type="text"
+                    value={draft}
+                  />
+                  <button className="btn btn-primary" disabled={!draft.trim()} onClick={sendMessage} type="button">
+                    <Send size={16} /> Send
+                  </button>
+                </div>
+              )}
             </>
           ) : (
             <div className="message-empty-state big">
