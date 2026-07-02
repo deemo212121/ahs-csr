@@ -33,16 +33,10 @@ import {
 } from "lucide-react";
 import { useAuth } from "@/components/AuthProvider";
 import { ThemeToggle } from "@/components/ThemeToggle";
-import { NotificationToastStack } from "@/components/NotificationToastStack";
 import { NotificationSettings } from "@/components/NotificationSettings";
 import { RealtimeStatus } from "@/components/RealtimeStatus";
-import { useNotificationFeed } from "@/lib/notifications/useNotificationFeed";
-import { useNotificationHistory } from "@/lib/notifications/useNotificationHistory";
-import { useToastQueue } from "@/lib/notifications/useToastQueue";
-import { playNotificationSound } from "@/lib/notifications/sounds";
-import { dispatchLiveUpdate } from "@/lib/notifications/useLiveUpdate";
+import { useNotifications } from "@/components/NotificationsProvider";
 import { usePresenceHeartbeat } from "@/lib/presence/usePresenceHeartbeat";
-import type { NotificationCategory } from "@/lib/notifications/settings";
 import type { AppRole } from "@/lib/types";
 
 type NavItem = { href: string; label: string; icon: React.ReactNode };
@@ -307,37 +301,11 @@ export function PortalShell({
 
   const base = useMemo(() => getRoleBase(role), [role]);
 
-  const toastQueue = useToastQueue(3);
-  const notifHistory = useNotificationHistory(base);
-
-  // The branch/region filter lives on the user's profile (saved via
-  // /api/me/preferences) so it's the same everywhere and on every device.
-  const regionFilter = profile?.preferences?.filterRegions ?? [];
-
-  function onArrival(category: NotificationCategory) {
-    playNotificationSound(category);
-    toastQueue.push(category);
-    notifHistory.addRecord(category);
-    dispatchLiveUpdate(category);
-  }
-
-  const verifyFeed = useNotificationFeed("verify", user, {
-    enabled: isAgentPortal,
-    onNewArrival: () => onArrival("verify"),
-    onItemsProcessed: () => playNotificationSound("verify"),
-    regionFilter,
-  });
-  const messagesFeed = useNotificationFeed("messages", user, {
-    enabled: isAgentPortal,
-    onNewArrival: () => onArrival("messages"),
-  });
-  const callsFeed = useNotificationFeed("calls", user, {
-    enabled: isAgentPortal,
-    onNewArrival: () => onArrival("calls"),
-    regionFilter,
-  });
-
-  const liveNotificationCount = verifyFeed.count + messagesFeed.count + callsFeed.count;
+  // Feed polling, realtime subscriptions, and the toast queue itself all
+  // live in NotificationsProvider at the app root so they survive page
+  // navigation — PortalShell just reads that shared state for nav badges
+  // and the notification dropdown.
+  const { verifyFeed, messagesFeed, callsFeed, notifHistory, liveNotificationCount } = useNotifications();
 
   function badgeFor(href: string): number {
     if (href.includes("/verification")) return verifyFeed.count;
@@ -762,18 +730,6 @@ export function PortalShell({
             </div>
           </header>
         )}
-        {isAgentPortal ? (
-          <NotificationToastStack
-            basePath={base}
-            onDismiss={toastQueue.dismiss}
-            onMarkRead={(cat: NotificationCategory) => {
-              if (cat === "verify") verifyFeed.markRead();
-              if (cat === "messages") messagesFeed.markRead();
-              if (cat === "calls") callsFeed.markRead();
-            }}
-            toasts={toastQueue.visible}
-          />
-        ) : null}
         <div className="page">{children}</div>
         {isCustomerPortal ? (
           <nav

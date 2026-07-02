@@ -1,6 +1,6 @@
 'use client';
 
-import { CalendarDays, MessageSquare, RefreshCw, Send } from 'lucide-react';
+import { CalendarDays, ClipboardList, MessageSquare, Pencil, Send, Trash2 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '@/components/AuthProvider';
 import { fetchJsonWithFirebase } from '@/lib/auth/client';
@@ -99,6 +99,79 @@ export function InternalMessagesPage({
   const [loading, setLoading] = useState(true);
   const [threadLoading, setThreadLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [diagnostics, setDiagnostics] = useState<unknown>(null);
+  const [diagnosticsLoading, setDiagnosticsLoading] = useState(false);
+  const [automatedChatOpen, setAutomatedChatOpen] = useState(false);
+  const [automatedChatDraft, setAutomatedChatDraft] = useState('');
+  const [automatedChatMessage, setAutomatedChatMessage] = useState<string | null>(null);
+  const [automatedTemplates, setAutomatedTemplates] = useState<{ id: string; text: string }[]>([]);
+  const [editingTemplateId, setEditingTemplateId] = useState<string | null>(null);
+
+  // Scoped per CSR account (keyed by profile id), not shared across whoever
+  // else uses this browser.
+  const automatedTemplatesKey = profile?.id ? `ushs_automated_chat_templates_${profile.id}` : null;
+
+  useEffect(() => {
+    if (!automatedTemplatesKey) return;
+    try {
+      const saved = window.localStorage.getItem(automatedTemplatesKey);
+      setAutomatedTemplates(saved ? JSON.parse(saved) : []);
+    } catch {
+      // localStorage can throw in private browsing / disabled-storage modes.
+      setAutomatedChatMessage('Your browser is blocking local storage, so saved templates won\'t persist here.');
+    }
+  }, [automatedTemplatesKey]);
+
+  function persistTemplates(next: { id: string; text: string }[]) {
+    setAutomatedTemplates(next);
+    if (!automatedTemplatesKey) return;
+    try {
+      window.localStorage.setItem(automatedTemplatesKey, JSON.stringify(next));
+    } catch (err) {
+      setAutomatedChatMessage(err instanceof Error ? `Unable to save: ${err.message}` : 'Unable to save template.');
+      window.setTimeout(() => setAutomatedChatMessage(null), 3000);
+    }
+  }
+
+  function openNewTemplateForm() {
+    setEditingTemplateId(null);
+    setAutomatedChatDraft('');
+    setAutomatedChatOpen(true);
+  }
+
+  function startEditTemplate(template: { id: string; text: string }) {
+    setEditingTemplateId(template.id);
+    setAutomatedChatDraft(template.text);
+    setAutomatedChatOpen(true);
+  }
+
+  function saveAutomatedChatTemplate() {
+    const text = automatedChatDraft.trim();
+    if (!text) return;
+    const next = editingTemplateId
+      ? automatedTemplates.map((t) => (t.id === editingTemplateId ? { ...t, text } : t))
+      : [...automatedTemplates, { id: `${Date.now()}`, text }];
+    persistTemplates(next);
+    setAutomatedChatMessage(editingTemplateId ? 'Template updated.' : 'Template saved.');
+    setAutomatedChatOpen(false);
+    setEditingTemplateId(null);
+    setAutomatedChatDraft('');
+    window.setTimeout(() => setAutomatedChatMessage(null), 3000);
+  }
+
+  function deleteTemplate(id: string) {
+    persistTemplates(automatedTemplates.filter((t) => t.id !== id));
+    if (editingTemplateId === id) {
+      setAutomatedChatOpen(false);
+      setEditingTemplateId(null);
+      setAutomatedChatDraft('');
+    }
+  }
+
+  async function sendAutomatedChat(text: string) {
+    if (!text.trim()) return;
+    await sendMessage(text.trim());
+  }
 
   const activeThread = useMemo(
     () => threads.find((thread) => thread.id === activeId) ?? threads[0] ?? null,
@@ -145,6 +218,20 @@ export function InternalMessagesPage({
     }
   }
 
+  async function runDiagnostics() {
+    if (!user) return;
+    setDiagnosticsLoading(true);
+    setDiagnostics(null);
+    try {
+      const data = await fetchJsonWithFirebase(user, '/api/messages/diagnostics');
+      setDiagnostics(data);
+    } catch (err) {
+      setDiagnostics({ message: err instanceof Error ? err.message : 'Diagnostics failed.' });
+    } finally {
+      setDiagnosticsLoading(false);
+    }
+  }
+
   async function loadMessages(threadId: string, silent = false) {
     if (!user) return;
     if (!silent) setThreadLoading(true);
@@ -159,10 +246,10 @@ export function InternalMessagesPage({
     }
   }
 
-  async function sendMessage() {
-    if (!user || !activeThread || !draft.trim()) return;
-    const message = draft.trim();
-    setDraft('');
+  async function sendMessage(override?: string) {
+    const message = (override ?? draft).trim();
+    if (!user || !activeThread || !message) return;
+    if (!override) setDraft('');
     try {
       await fetchJsonWithFirebase(user, `/api/messages/threads/${activeThread.id}/messages`, {
         method: 'POST',
@@ -171,7 +258,7 @@ export function InternalMessagesPage({
       await Promise.all([loadMessages(activeThread.id), loadThreads()]);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to send message.');
-      setDraft(message);
+      if (!override) setDraft(message);
     }
   }
 
@@ -206,12 +293,21 @@ export function InternalMessagesPage({
           <h1 className="page-title">{title}</h1>
           <p className="muted">{description}</p>
         </div>
-        <button className="btn btn-secondary" onClick={() => void loadThreads()} type="button">
-          <RefreshCw size={16} /> Refresh
+        <button className="btn btn-secondary" disabled={diagnosticsLoading} onClick={() => void runDiagnostics()} type="button">
+          {diagnosticsLoading ? 'Running diagnostics...' : 'Run Diagnostics'}
         </button>
       </div>
 
       {error ? <div className="form-error">{error}</div> : null}
+      {diagnostics ? (
+        <div className="message-diagnostics-panel">
+          <div className="message-diagnostics-head">
+            <strong>Diagnostics</strong>
+            <button onClick={() => setDiagnostics(null)} type="button">Close</button>
+          </div>
+          <pre>{JSON.stringify(diagnostics, null, 2)}</pre>
+        </div>
+      ) : null}
 
       <section className="leadership-messages-layout ticket-messages-layout">
         <div className="agent-table-panel ticket-thread-panel">
@@ -257,11 +353,6 @@ export function InternalMessagesPage({
                 </div>
                 <span className="message-thread-pill">Approved Ticket</span>
               </div>
-              <div className="ticket-chat-details">
-                <span><b>Address:</b> {[activeThread.request?.city, activeThread.request?.state, activeThread.request?.zip_code].filter(Boolean).join(', ') || 'N/A'}</span>
-                <span><b>Model:</b> {activeThread.request?.model_number || 'N/A'}</span>
-                <span><b>ER Ticket:</b> {activeThread.er_ticket_id || 'Pending/none'}</span>
-              </div>
               <div className="leadership-chat-body ticket-chat-body">
                 {threadLoading ? <div className="message-empty-state">Opening conversation...</div> : null}
                 {!threadLoading && !messages.length ? <div className="message-empty-state">No messages yet.</div> : null}
@@ -294,7 +385,7 @@ export function InternalMessagesPage({
                     type="text"
                     value={draft}
                   />
-                  <button className="btn btn-primary" disabled={!draft.trim()} onClick={sendMessage} type="button">
+                  <button className="btn btn-primary" disabled={!draft.trim()} onClick={() => void sendMessage()} type="button">
                     <Send size={16} /> Send
                   </button>
                 </div>
@@ -307,6 +398,98 @@ export function InternalMessagesPage({
               <p>Approved customer tickets will appear here after the verification queue creates a message thread.</p>
             </div>
           )}
+        </div>
+
+        <div className="agent-table-panel ticket-details-panel">
+          <h2>
+            <ClipboardList size={16} />
+            Ticket Details
+          </h2>
+          {activeThread ? (
+            <div className="ticket-details-box">
+              <div className="ticket-details-row"><span>Name</span><strong>{activeThread.request?.full_name || 'N/A'}</strong></div>
+              <div className="ticket-details-row"><span>Phone</span><strong>{activeThread.request?.phone_number || 'N/A'}</strong></div>
+              <div className="ticket-details-row"><span>Address</span><strong>{[activeThread.request?.city, activeThread.request?.state, activeThread.request?.zip_code].filter(Boolean).join(', ') || 'N/A'}</strong></div>
+              <div className="ticket-details-row"><span>Region</span><strong>{activeThread.request?.region || 'N/A'}</strong></div>
+              <div className="ticket-details-row"><span>Ticket #</span><strong>{activeThread.request_number || 'N/A'}</strong></div>
+              <div className="ticket-details-row"><span>Model</span><strong>{activeThread.request?.model_number || 'N/A'}</strong></div>
+              <div className="ticket-details-row"><span>Serial</span><strong>{activeThread.request?.serial_number || 'N/A'}</strong></div>
+              <div className="ticket-details-row"><span>Appliance</span><strong>{activeThread.request?.manual_appliance_type || 'N/A'}</strong></div>
+              <div className="ticket-details-row"><span>Brand</span><strong>{activeThread.request?.manual_brand || 'N/A'}</strong></div>
+            </div>
+          ) : (
+            <div className="message-empty-state">Select a conversation to see ticket details.</div>
+          )}
+
+          <div className="automated-chat-box">
+            <button
+              className="automated-chat-toggle"
+              onClick={() => (automatedChatOpen ? setAutomatedChatOpen(false) : openNewTemplateForm())}
+              type="button"
+            >
+              + Add your customized automated chat
+            </button>
+
+            {automatedChatOpen ? (
+              <div className="automated-chat-form">
+                <textarea
+                  onChange={(event) => setAutomatedChatDraft(event.target.value)}
+                  placeholder="Write the automated reply you want to reuse across conversations..."
+                  rows={4}
+                  value={automatedChatDraft}
+                />
+                <div className="automated-chat-actions">
+                  <button
+                    className="btn btn-secondary"
+                    onClick={() => {
+                      setAutomatedChatOpen(false);
+                      setEditingTemplateId(null);
+                      setAutomatedChatDraft('');
+                    }}
+                    type="button"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    className="btn btn-primary"
+                    disabled={!automatedChatDraft.trim()}
+                    onClick={saveAutomatedChatTemplate}
+                    type="button"
+                  >
+                    {editingTemplateId ? 'Save Changes' : 'Save Template'}
+                  </button>
+                </div>
+              </div>
+            ) : null}
+
+            {automatedChatMessage ? <p className="automated-chat-status">{automatedChatMessage}</p> : null}
+
+            <div className="automated-chat-list">
+              {automatedTemplates.map((template) => (
+                <div className="automated-chat-item" key={template.id}>
+                  <button
+                    className="automated-chat-item-send"
+                    disabled={!activeThread || isThreadLocked(activeThread!)}
+                    onClick={() => void sendAutomatedChat(template.text)}
+                    title="Send to this conversation"
+                    type="button"
+                  >
+                    <Send size={13} />
+                    <span>{template.text}</span>
+                  </button>
+                  <div className="automated-chat-item-actions">
+                    <button aria-label="Edit template" onClick={() => startEditTemplate(template)} type="button">
+                      <Pencil size={13} />
+                    </button>
+                    <button aria-label="Delete template" onClick={() => deleteTemplate(template.id)} type="button">
+                      <Trash2 size={13} />
+                    </button>
+                  </div>
+                </div>
+              ))}
+              {!automatedTemplates.length ? <p className="automated-chat-empty">No saved automated chats yet.</p> : null}
+            </div>
+          </div>
         </div>
       </section>
     </div>

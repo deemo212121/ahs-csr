@@ -2,7 +2,8 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { localProfileId, type AuthContext } from '@/lib/auth/server';
 import type { ServiceRequest } from '@/lib/types';
 import { getErSupabaseAdmin, isErSupabaseConfigured } from '@/lib/supabase/er-admin';
-import { ensureErCustomerLinksForProfile, getLinkedErCustomerIds } from '@/lib/er-customer-links';
+import { ensureErCustomerLinksForProfile, getLinkedErCustomerIds, matchErCustomersToLocalProfiles } from '@/lib/er-customer-links';
+import { listErModeRequests, useErTicketDatabase } from '@/lib/er-ticket-database';
 
 export type TicketMessageRequest = {
   id: string;
@@ -47,6 +48,7 @@ type TicketMessageThread = {
   service_city: string | null;
   service_state: string | null;
   service_zip: string | null;
+  service_region: string | null;
   manufacturer: string | null;
   product_type: string | null;
   model_number: string | null;
@@ -117,6 +119,7 @@ const threadSelect = [
   'service_city',
   'service_state',
   'service_zip',
+  'service_region',
   'manufacturer',
   'product_type',
   'model_number',
@@ -207,7 +210,7 @@ function threadRequestFromThread(thread: TicketMessageThread): TicketMessageRequ
     phone_number: thread.customer_phone || '',
     customer_email: thread.customer_email,
     city: thread.service_city,
-    region: thread.service_address,
+    region: thread.service_region,
     state: thread.service_state,
     zip_code: thread.service_zip,
     manual_brand: thread.manufacturer,
@@ -318,6 +321,7 @@ function mapErTicketToThreadInsert(ticket: ErTicketRow, customer: ErCustomerRow 
     service_city: cleanString(ticket.location) || cleanString(customer?.city),
     service_state: cleanString(customer?.state),
     service_zip: cleanString(customer?.zip),
+    service_region: cleanString(ticket.location),
     manufacturer: cleanString(ticket.manufacturer),
     product_type: cleanString(ticket.product_type),
     model_number: cleanString(ticket.model),
@@ -491,12 +495,16 @@ export async function ensureTicketMessageThread(
   if (existingError) throw new Error(existingError.message);
   if (existing) {
     let thread = existing as unknown as TicketMessageThread;
-    if (thread.customer_id !== customerId) {
+    const patch: Record<string, unknown> = {};
+    if (thread.customer_id !== customerId) patch.customer_id = customerId;
+    // Backfill service_region on threads created before that column existed.
+    if (!thread.service_region && localRequest.region) patch.service_region = localRequest.region;
+    if (Object.keys(patch).length) {
       await supabaseAdmin
         .from('ticket_message_threads')
-        .update({ customer_id: customerId, updated_at: new Date().toISOString() })
+        .update({ ...patch, updated_at: new Date().toISOString() })
         .eq('id', thread.id);
-      thread = { ...thread, customer_id: customerId };
+      thread = { ...thread, ...patch };
     }
     await insertInitialApprovalMessage(supabaseAdmin, thread, localRequest);
     await upsertLocalTicketErLink(supabaseAdmin, thread);
@@ -520,6 +528,7 @@ export async function ensureTicketMessageThread(
       service_city: localRequest.city,
       service_state: localRequest.state,
       service_zip: localRequest.zip_code,
+      service_region: localRequest.region,
       manufacturer: localRequest.manual_brand,
       product_type: localRequest.manual_appliance_type,
       model_number: localRequest.model_number,
@@ -547,21 +556,21 @@ export async function ensureErPortalRequestMessageThread(
   const customerId = await resolveLocalCustomerIdForRequest(supabaseAdmin, request);
   if (!customerId) return null;
 
+  // Look up by er_ticket_id alone (not scoped to customer_id or
+  // source_system) — that matches ticket_message_threads_er_ticket_unique_idx,
+  // the actual database constraint. A ticket that's already synced to the ER
+  // board may already have a thread created by ensureErTicketThreads under a
+  // different source_system; scoping this lookup any narrower than the real
+  // constraint caused duplicate-insert collisions that broke the whole batch.
   const erTicketId = request.er_ticket_id || null;
-  let existingQuery = supabaseAdmin
-    .from('ticket_message_threads')
-    .select(threadSelect)
-    .eq('customer_id', customerId);
-
-  if (erTicketId) {
-    existingQuery = existingQuery.eq('er_ticket_id', erTicketId);
-  } else {
-    existingQuery = existingQuery
-      .eq('source_system', 'er_portal_service_request')
-      .eq('request_number', request.request_number);
-  }
-
-  const { data: existing, error: existingError } = await existingQuery.maybeSingle();
+  const { data: existing, error: existingError } = await (erTicketId
+    ? supabaseAdmin.from('ticket_message_threads').select(threadSelect).eq('er_ticket_id', erTicketId).maybeSingle()
+    : supabaseAdmin
+        .from('ticket_message_threads')
+        .select(threadSelect)
+        .eq('source_system', 'er_portal_service_request')
+        .eq('request_number', request.request_number)
+        .maybeSingle());
   if (existingError) throw new Error(existingError.message);
 
   const ensureInitialMessage = async (thread: TicketMessageThread) => {
@@ -586,12 +595,18 @@ export async function ensureErPortalRequestMessageThread(
 
   if (existing) {
     let thread = existing as unknown as TicketMessageThread;
-    if (thread.customer_id !== customerId) {
+    const patch: Record<string, unknown> = {};
+    if (thread.customer_id !== customerId) patch.customer_id = customerId;
+    // Backfill service_region on threads created before that column existed
+    // (previously the "region" shown on screen fell back to the street
+    // address, e.g. showing "Suite 2" instead of an actual AHS branch).
+    if (!thread.service_region && request.region) patch.service_region = request.region;
+    if (Object.keys(patch).length) {
       await supabaseAdmin
         .from('ticket_message_threads')
-        .update({ customer_id: customerId, updated_at: new Date().toISOString() })
+        .update({ ...patch, updated_at: new Date().toISOString() })
         .eq('id', thread.id);
-      thread = { ...thread, customer_id: customerId };
+      thread = { ...thread, ...patch };
     }
     await ensureInitialMessage(thread);
     await upsertLocalTicketErLink(supabaseAdmin, thread);
@@ -616,6 +631,7 @@ export async function ensureErPortalRequestMessageThread(
       service_city: request.city,
       service_state: request.state,
       service_zip: request.zip_code,
+      service_region: request.region,
       manufacturer: request.manual_brand,
       product_type: request.manual_appliance_type,
       model_number: request.model_number,
@@ -629,82 +645,28 @@ export async function ensureErPortalRequestMessageThread(
     .select(threadSelect)
     .single();
 
-  if (createError) throw new Error(createError.message);
+  if (createError) {
+    // Another request (e.g. ensureErTicketThreads running for the same ticket)
+    // may have won the race and inserted first. Re-fetch instead of failing.
+    if (createError.code === '23505' && erTicketId) {
+      const { data: raced, error: racedError } = await supabaseAdmin
+        .from('ticket_message_threads')
+        .select(threadSelect)
+        .eq('er_ticket_id', erTicketId)
+        .maybeSingle();
+      if (racedError) throw new Error(racedError.message);
+      if (raced) {
+        const thread = raced as unknown as TicketMessageThread;
+        await ensureInitialMessage(thread);
+        await upsertLocalTicketErLink(supabaseAdmin, thread);
+        return thread;
+      }
+    }
+    throw new Error(createError.message);
+  }
   const thread = created as unknown as TicketMessageThread;
   await ensureInitialMessage(thread);
   await upsertLocalTicketErLink(supabaseAdmin, thread);
-  return thread;
-}
-
-// Creates the shared CSR/TL staff thread for a just-approved portal request.
-// Separate from the customer thread — staff see this one, filtered by service_city / branch.
-export async function ensureErPortalRequestStaffThread(
-  supabaseAdmin: SupabaseClient,
-  request: ServiceRequest,
-): Promise<TicketMessageThread | null> {
-  if (request.verification_status !== 'approved') return null;
-  if (isClosedTicketStatus(request.er_ticket?.status)) return null;
-
-  const erTicketId = request.er_ticket_id || null;
-  if (!erTicketId) return null;
-
-  const { data: existing, error: existingError } = await supabaseAdmin
-    .from('ticket_message_threads')
-    .select(threadSelect)
-    .eq('er_ticket_id', erTicketId)
-    .eq('source_system', 'er_ticket_board')
-    .maybeSingle();
-
-  if (existingError) throw new Error(existingError.message);
-  if (existing) return existing as unknown as TicketMessageThread;
-
-  const ticketNo = request.request_number;
-  const product = request.manual_appliance_type || 'Service Request';
-  const now = new Date().toISOString();
-
-  const { data: created, error: createError } = await supabaseAdmin
-    .from('ticket_message_threads')
-    .insert({
-      request_id: null,
-      customer_id: null,
-      request_number: ticketNo,
-      er_ticket_id: erTicketId,
-      er_ticket_no: ticketNo,
-      source_system: 'er_ticket_board',
-      customer_name: request.full_name,
-      customer_phone: request.phone_number,
-      customer_email: request.customer_email,
-      service_address: request.service_address || null,
-      service_city: request.city,
-      service_state: request.state,
-      service_zip: request.zip_code,
-      manufacturer: request.manual_brand,
-      product_type: request.manual_appliance_type,
-      model_number: request.model_number,
-      serial_number: request.serial_number,
-      schedule_date: request.preferred_date,
-      ticket_status: 'approved',
-      subject: `${ticketNo} • ${product}`,
-      status: 'open',
-      last_message_at: now,
-    })
-    .select(threadSelect)
-    .single();
-
-  if (createError) return null;
-
-  const thread = created as unknown as TicketMessageThread;
-  await supabaseAdmin.from('ticket_messages').insert({
-    thread_id: thread.id,
-    request_id: null,
-    sender_profile_id: null,
-    sender_role: null,
-    sender_name: 'USHS Support',
-    message_body: `Conversation opened for ER ticket ${ticketNo}. Use this thread for schedule updates, address changes, appliance details, or any questions about this ticket.`,
-    message_type: 'system',
-    is_internal: false,
-  });
-
   return thread;
 }
 
@@ -742,24 +704,6 @@ async function getLocalCustomerProfiles(supabaseAdmin: SupabaseClient) {
 
   if (error) throw new Error(error.message);
   return (data ?? []) as LocalCustomerProfile[];
-}
-
-function findMatchingLocalCustomer(
-  profiles: LocalCustomerProfile[],
-  customer: ErCustomerRow | undefined,
-) {
-  const erEmail = normalizeEmail(cleanString(customer?.email));
-  const erPhone = normalizePhone(cleanString(customer?.phone) || cleanString(customer?.second_phone));
-
-  if (!erEmail && !erPhone) return null;
-
-  const match = profiles.find((profile) => {
-    const profileEmail = normalizeEmail(profile.email);
-    const profilePhone = normalizePhone(profile.phone_number);
-    return Boolean((erEmail && profileEmail === erEmail) || (erPhone && profilePhone === erPhone));
-  });
-
-  return match?.id ?? null;
 }
 
 async function resolveLocalCustomerIdForRequest(
@@ -846,7 +790,13 @@ async function ensureErTicketThreads(
     }
   }
 
-  const localProfiles = auth.role === 'customer' ? [] : await getLocalCustomerProfiles(supabaseAdmin);
+  // Match each ER customer to a registered local account (phone/email first,
+  // then name as a fallback) so conversations only open for tickets whose
+  // customer actually has an account in our system. Matches persist to
+  // customer_er_links, so they're inspectable directly in Supabase.
+  const erCustomerToLocalId = auth.role === 'customer'
+    ? new Map<string, string>()
+    : await matchErCustomersToLocalProfiles(supabaseAdmin, Array.from(erCustomersById.values()));
   const ticketIds = ticketRows.map((ticket) => text(ticket.id)).filter(Boolean);
   const auditRowsByTicketId = new Map<string, ErTicketAuditRow[]>();
 
@@ -874,12 +824,16 @@ async function ensureErTicketThreads(
     }
   }
 
-  // BATCH: single query for all existing staff threads (replaces one query per ticket)
+  // BATCH: single query for all existing threads for these tickets. Not
+  // scoped to source_system='er_ticket_board' — ticket_message_threads_er_ticket_unique_idx
+  // is unique on er_ticket_id alone, so a ticket approved through the portal
+  // (source_system='er_portal_service_request') may already have a thread
+  // here. Missing that caused duplicate-insert collisions that broke the
+  // whole batch and silently dropped unrelated tickets from the list.
   const { data: existingThreadsData } = await supabaseAdmin
     .from('ticket_message_threads')
     .select(threadSelect)
-    .in('er_ticket_id', ticketIds)
-    .eq('source_system', 'er_ticket_board');
+    .in('er_ticket_id', ticketIds);
 
   const existingByErTicketId = new Map<string, TicketMessageThread>(
     ((existingThreadsData ?? []) as unknown as TicketMessageThread[])
@@ -901,7 +855,7 @@ async function ensureErTicketThreads(
     const erCustomer = erCustomerId ? erCustomersById.get(erCustomerId) : undefined;
     const localCustomerId = auth.role === 'customer'
       ? auth.profile.id
-      : findMatchingLocalCustomer(localProfiles, erCustomer);
+      : (erCustomerId && erCustomerToLocalId.get(erCustomerId)) || null;
 
     const existing = existingByErTicketId.get(erTicketId);
     if (existing) {
@@ -909,20 +863,30 @@ async function ensureErTicketThreads(
         threadIdsToClose.push(existing.id);
       }
       existingThreadsToProcess.push({ erTicketId, thread: existing });
-    } else if (!ticketClosed) {
+    } else if (!ticketClosed && localCustomerId) {
+      // Only open a conversation for tickets whose customer has a matching
+      // registered account in our system (matched by phone/email above).
       // Do not open a new thread for a ticket that is already completed/closed.
       newInserts.push(mapErTicketToThreadInsert(ticket, erCustomer, localCustomerId));
     }
   }
 
-  // BATCH: insert all new threads at once
-  let newThreads: TicketMessageThread[] = [];
-  if (newInserts.length) {
-    const { data: created } = await supabaseAdmin
+  // Insert new threads one at a time (not batched) so a single er_ticket_id
+  // collision — e.g. a race with the portal-approval path creating the same
+  // ticket's thread concurrently — only skips that one ticket instead of
+  // failing the whole batch insert and silently dropping every other ticket.
+  const newThreads: TicketMessageThread[] = [];
+  for (const insertRow of newInserts) {
+    const { data: created, error: insertError } = await supabaseAdmin
       .from('ticket_message_threads')
-      .insert(newInserts)
-      .select(threadSelect);
-    newThreads = (created ?? []) as unknown as TicketMessageThread[];
+      .insert(insertRow)
+      .select(threadSelect)
+      .single();
+    if (insertError) {
+      console.error(`ensureErTicketThreads: failed to insert thread for er_ticket_id ${insertRow.er_ticket_id}:`, insertError.message);
+      continue;
+    }
+    newThreads.push(created as unknown as TicketMessageThread);
   }
 
   // BATCH: close threads whose ER ticket has reached a completed/cancelled status
@@ -1087,6 +1051,41 @@ export async function getThreadForAccess(
   return messageThread;
 }
 
+// Threads normally get created the moment a ticket is approved (see the
+// review route), but any ticket approved before that wiring existed — or
+// where that call failed — would otherwise never get a conversation. This
+// backfills the shared thread for every already-approved AHS portal ticket
+// (request_number starts with "SRV") whenever staff load the Messages page.
+// Uses the same function that creates the customer's own thread — staff
+// read/reply to that exact conversation, there is no separate staff copy.
+async function backfillErPortalRequestThreads(
+  supabaseAdmin: SupabaseClient,
+  auth: AuthContext,
+  limit: number,
+) {
+  if (!useErTicketDatabase()) return;
+
+  try {
+    const requests = await listErModeRequests({
+      context: auth,
+      verificationStatusFilter: 'approved',
+      view: null,
+      limit: Math.min(Math.max(limit, 50), 500),
+    });
+
+    for (const request of requests) {
+      try {
+        await ensureErPortalRequestMessageThread(supabaseAdmin, request);
+      } catch (err) {
+        console.error(`backfillErPortalRequestThreads: failed for ${request.request_number}:`, err instanceof Error ? err.message : err);
+      }
+    }
+  } catch (err) {
+    // Best-effort backfill — a failure here should not break the Messages page.
+    console.error('backfillErPortalRequestThreads: failed to list approved requests:', err instanceof Error ? err.message : err);
+  }
+}
+
 export async function listTicketMessageThreads(
   supabaseAdmin: SupabaseClient,
   auth: AuthContext,
@@ -1096,6 +1095,9 @@ export async function listTicketMessageThreads(
   // Skipping for staff avoids wasted subrequests in ER-mode deployments.
   if (auth.role === 'customer') {
     await ensureApprovedTicketThreads(supabaseAdmin, auth);
+  }
+  if (auth.role !== 'customer') {
+    await backfillErPortalRequestThreads(supabaseAdmin, auth, limit);
   }
   await ensureErTicketThreads(supabaseAdmin, auth, limit);
 
@@ -1109,21 +1111,13 @@ export async function listTicketMessageThreads(
   if (auth.role === 'customer') {
     query = query.eq('customer_id', auth.profile.id);
   } else {
-    // Staff see only the internal staff threads (source_system = 'er_ticket_board').
-    // Customer-facing threads (er_portal_service_request, local_verified_ticket) are hidden from staff view.
-    query = query.eq('source_system', 'er_ticket_board');
-
-    // CSR agents and team leaders are further filtered to their branch_access.
-    // Managers and admins see all branches.
-    if (auth.role === 'csr' || auth.role === 'team_leader') {
-      const branches = (auth.profile.branch_access ?? '')
-        .split('|')
-        .map((b) => b.trim())
-        .filter(Boolean);
-      if (branches.length > 0) {
-        query = query.in('service_city', branches);
-      }
-    }
+    // Staff see every open conversation tied to an approved ticket — full
+    // stop. No source_system/branch filtering: those were both silently
+    // excluding real, existing conversations (source_system mismatches
+    // between the portal and ER-board thread creators, and a service_city
+    // vs. branch_access naming mismatch). ticket_status is set to 'approved'
+    // by both thread-creation paths, so it's a reliable, simple filter.
+    query = query.eq('ticket_status', 'approved');
   }
 
   const { data: threadsData, error } = await query;
