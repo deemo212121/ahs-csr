@@ -486,17 +486,34 @@ export async function ensureTicketMessageThread(
   const customerId = await resolveLocalCustomerIdForRequest(supabaseAdmin, localRequest);
   if (!customerId) return null;
 
-  const { data: existing, error: existingError } = await supabaseAdmin
+  const { data: byRequestId, error: existingError } = await supabaseAdmin
     .from('ticket_message_threads')
     .select(threadSelect)
     .eq('request_id', localRequest.id)
     .maybeSingle();
-
   if (existingError) throw new Error(existingError.message);
+
+  // A ticket approved through the AHS/ER portal may already have a shared
+  // thread created by ensureErPortalRequestMessageThread/ensureErTicketThreads
+  // with request_id left null (those key off er_ticket_id instead). Looking
+  // up by request_id alone missed that thread and created a second, brand
+  // new "open" thread for the same ticket on every customer poll.
+  let existing = byRequestId;
+  if (!existing && localRequest.er_ticket_id) {
+    const { data: byErTicketId, error: erLookupError } = await supabaseAdmin
+      .from('ticket_message_threads')
+      .select(threadSelect)
+      .eq('er_ticket_id', localRequest.er_ticket_id)
+      .maybeSingle();
+    if (erLookupError) throw new Error(erLookupError.message);
+    existing = byErTicketId;
+  }
+
   if (existing) {
     let thread = existing as unknown as TicketMessageThread;
     const patch: Record<string, unknown> = {};
     if (thread.customer_id !== customerId) patch.customer_id = customerId;
+    if (!thread.request_id) patch.request_id = localRequest.id;
     // Backfill service_region on threads created before that column existed.
     if (!thread.service_region && localRequest.region) patch.service_region = localRequest.region;
     if (Object.keys(patch).length) {
@@ -743,7 +760,25 @@ async function ensureErTicketThreads(
     ? await getLinkedErCustomerIds(supabaseAdmin, auth.profile)
     : [];
 
-  if (auth.role === 'customer' && !linkedCustomerIds.length) {
+  // A customer's own thread already records its er_ticket_id once linked —
+  // sync status updates for those directly, not only via customer_er_links.
+  // That table is only populated when staff's matching step runs (it's
+  // skipped below for the customer role), so relying on it alone meant
+  // "USHS Ticket Updates" system messages only ever synced while a CSR had
+  // the Messages page open, leaving the customer's chat looking stale.
+  let ownThreadErTicketIds: string[] = [];
+  if (auth.role === 'customer') {
+    const { data: ownThreads } = await supabaseAdmin
+      .from('ticket_message_threads')
+      .select('er_ticket_id')
+      .eq('customer_id', auth.profile.id)
+      .not('er_ticket_id', 'is', null);
+    ownThreadErTicketIds = ((ownThreads ?? []) as Array<{ er_ticket_id: string | null }>)
+      .map((t) => t.er_ticket_id)
+      .filter((id): id is string => Boolean(id));
+  }
+
+  if (auth.role === 'customer' && !linkedCustomerIds.length && !ownThreadErTicketIds.length) {
     return;
   }
 
@@ -759,7 +794,15 @@ async function ensureErTicketThreads(
   }
 
   if (auth.role === 'customer') {
-    ticketQuery = ticketQuery.in('customer_id', linkedCustomerIds);
+    if (ownThreadErTicketIds.length && linkedCustomerIds.length) {
+      ticketQuery = ticketQuery.or(
+        `customer_id.in.(${linkedCustomerIds.join(',')}),id.in.(${ownThreadErTicketIds.join(',')})`,
+      );
+    } else if (ownThreadErTicketIds.length) {
+      ticketQuery = ticketQuery.in('id', ownThreadErTicketIds);
+    } else {
+      ticketQuery = ticketQuery.in('customer_id', linkedCustomerIds);
+    }
   }
 
   const { data: tickets, error: ticketError } = await ticketQuery;
@@ -802,11 +845,16 @@ async function ensureErTicketThreads(
 
   if (ticketIds.length) {
     try {
+      // Fetch newest-first so the row limit trims old history, not the
+      // latest change — querying ascending-with-a-limit was cutting off the
+      // most recent status update once a ticket built up enough audit rows,
+      // which left ticket_status (and the "closed" lock/grace logic that
+      // reads it) stuck on a stale value even after the status was reverted.
       const { data: auditRows, error: auditError } = await erSupabase
         .from(getErTicketAuditTable())
         .select('id, ticket_id, action, field, before_value, after_value, created_at')
         .in('ticket_id', ticketIds)
-        .order('created_at', { ascending: true })
+        .order('created_at', { ascending: false })
         .limit(Math.max(1000, ticketIds.length * 25));
 
       if (!auditError && auditRows) {
@@ -816,6 +864,11 @@ async function ensureErTicketThreads(
           const existing = auditRowsByTicketId.get(ticketId) ?? [];
           existing.push(row);
           auditRowsByTicketId.set(ticketId, existing);
+        }
+        // Rows came back newest-first per ticket; the rest of this function
+        // expects chronological (oldest-first) order.
+        for (const [ticketId, rows] of auditRowsByTicketId) {
+          auditRowsByTicketId.set(ticketId, rows.slice().reverse());
         }
       }
     } catch {
@@ -841,10 +894,13 @@ async function ensureErTicketThreads(
       .map((t) => [t.er_ticket_id!, t]),
   );
 
-  // Separate into existing vs. new; track completed tickets whose threads should be closed
+  // Existing conversations are never auto-closed by the ER ticket's status —
+  // status changes still flow in as automatic chat updates (below), but
+  // whether the conversation itself locks is now entirely a manual CSR
+  // action (see the thread PATCH "complete" action), not tied to what
+  // happens to the ticket on the ER side.
   const newInserts: ReturnType<typeof mapErTicketToThreadInsert>[] = [];
   const existingThreadsToProcess: Array<{ erTicketId: string; thread: TicketMessageThread }> = [];
-  const threadIdsToClose: string[] = [];
 
   for (const ticket of ticketRows) {
     const erTicketId = text(ticket.id);
@@ -859,9 +915,6 @@ async function ensureErTicketThreads(
 
     const existing = existingByErTicketId.get(erTicketId);
     if (existing) {
-      if (ticketClosed && existing.status === 'open') {
-        threadIdsToClose.push(existing.id);
-      }
       existingThreadsToProcess.push({ erTicketId, thread: existing });
     } else if (!ticketClosed && localCustomerId) {
       // Only open a conversation for tickets whose customer has a matching
@@ -887,14 +940,6 @@ async function ensureErTicketThreads(
       continue;
     }
     newThreads.push(created as unknown as TicketMessageThread);
-  }
-
-  // BATCH: close threads whose ER ticket has reached a completed/cancelled status
-  if (threadIdsToClose.length) {
-    await supabaseAdmin
-      .from('ticket_message_threads')
-      .update({ status: 'closed', updated_at: new Date().toISOString() })
-      .in('id', threadIdsToClose);
   }
 
   const allThreads = [
@@ -949,6 +994,12 @@ async function ensureErTicketThreads(
   const auditMessagesToInsert: Array<Record<string, unknown>> = [];
   const threadTimestampUpdates = new Map<string, { lastMessageAt: string; ticketStatus: string | null }>();
 
+  // Threads whose ticket_status needs refreshing even though there's no new
+  // audit message to insert this run (e.g. the status-change message was
+  // already recorded on a previous run, but ticket_status itself was never
+  // re-synced to it) — updated directly, no dependency on auditInsertError.
+  const statusOnlyUpdates: Array<{ threadId: string; ticketStatus: string }> = [];
+
   for (const thread of allThreads) {
     if (!thread.er_ticket_id) continue;
     const auditRows = auditRowsByTicketId.get(thread.er_ticket_id);
@@ -971,13 +1022,23 @@ async function ensureErTicketThreads(
         created_at: item.row.created_at,
       }));
 
-    if (!newAudit.length) continue;
+    // Always recompute the true latest status from the full (correctly
+    // ordered) audit trail — not gated behind "is there a new message to
+    // insert", otherwise a status that reverted after its change message was
+    // already recorded would never get reflected on the thread again.
+    const latestStatus = [...auditRows].reverse()
+      .find((r) => (r.field || '').trim().toLowerCase() === 'status')?.after_value ?? null;
+
+    if (!newAudit.length) {
+      if (latestStatus && latestStatus !== thread.ticket_status) {
+        statusOnlyUpdates.push({ threadId: thread.id, ticketStatus: latestStatus });
+      }
+      continue;
+    }
 
     auditMessagesToInsert.push(...newAudit);
 
     const latestCreatedAt = newAudit[newAudit.length - 1].created_at as string;
-    const latestStatus = [...auditRows].reverse()
-      .find((r) => (r.field || '').trim().toLowerCase() === 'status')?.after_value ?? null;
     const currentLast = thread.last_message_at || thread.created_at;
     const auditTime = latestCreatedAt ? new Date(latestCreatedAt).getTime() : 0;
     const currentTime = currentLast ? new Date(currentLast).getTime() : 0;
@@ -1001,6 +1062,13 @@ async function ensureErTicketThreads(
           .eq('id', threadId);
       }
     }
+  }
+
+  for (const update of statusOnlyUpdates) {
+    await supabaseAdmin
+      .from('ticket_message_threads')
+      .update({ ticket_status: update.ticketStatus, updated_at: new Date().toISOString() })
+      .eq('id', update.threadId);
   }
 
   // BATCH: upsert ER links for all threads that have both a customer and an ER ticket
@@ -1101,23 +1169,24 @@ export async function listTicketMessageThreads(
   }
   await ensureErTicketThreads(supabaseAdmin, auth, limit);
 
+  // Conversations are retained for both the customer and staff regardless of
+  // the underlying ticket's status — a thread only ever gets created for an
+  // approved ticket in the first place, so its mere existence here is enough.
+  // Not filtering on `status` (open/closed) or `ticket_status` (approved):
+  // both get flipped automatically whenever the ER ticket's status changes
+  // (see the audit-sync logic below), which was making conversations
+  // disappear for everyone the moment staff updated the ticket in AHS/ER —
+  // exactly the opposite of what a "retained" conversation should do.
+  // isThreadLocked() in the UI still greys out composing once a thread is
+  // actually closed; it just no longer disappears from the list.
   let query = supabaseAdmin
     .from('ticket_message_threads')
     .select(threadSelect)
-    .eq('status', 'open') // Only load active threads; closed/completed tickets are hidden by default
     .order('last_message_at', { ascending: false })
     .limit(limit);
 
   if (auth.role === 'customer') {
     query = query.eq('customer_id', auth.profile.id);
-  } else {
-    // Staff see every open conversation tied to an approved ticket — full
-    // stop. No source_system/branch filtering: those were both silently
-    // excluding real, existing conversations (source_system mismatches
-    // between the portal and ER-board thread creators, and a service_city
-    // vs. branch_access naming mismatch). ticket_status is set to 'approved'
-    // by both thread-creation paths, so it's a reliable, simple filter.
-    query = query.eq('ticket_status', 'approved');
   }
 
   const { data: threadsData, error } = await query;
@@ -1207,8 +1276,10 @@ export async function createTicketMessage(
 
   const thread = await getThreadForAccess(supabaseAdmin, auth, threadId);
 
-  if (thread.status === 'closed' || isClosedTicketStatus(thread.ticket_status)) {
-    throw new Error('This ticket is completed. Messaging is now closed.');
+  // Locking is a manual CSR action (see completeTicketThread) — the ER
+  // ticket's own status no longer closes the conversation on its own.
+  if (thread.status === 'closed') {
+    throw new Error('This conversation has been marked complete. Messaging is now closed.');
   }
 
   const now = new Date().toISOString();
@@ -1238,4 +1309,80 @@ export async function createTicketMessage(
     .eq('id', thread.id);
 
   return message as TicketMessage;
+}
+
+// Manually locks a conversation. This is the only way a thread closes now —
+// the ER ticket's own status changes still flow in as automatic chat
+// updates, but never lock messaging on their own.
+export async function completeTicketThread(
+  supabaseAdmin: SupabaseClient,
+  auth: AuthContext,
+  threadId: string,
+) {
+  if (auth.role === 'customer') {
+    throw new Error('Only CSR staff can mark a conversation complete.');
+  }
+
+  const thread = await getThreadForAccess(supabaseAdmin, auth, threadId);
+  if (thread.status === 'closed') return thread;
+
+  const now = new Date().toISOString();
+
+  await supabaseAdmin.from('ticket_messages').insert({
+    thread_id: thread.id,
+    request_id: thread.request_id,
+    sender_profile_id: localProfileId(auth),
+    sender_role: auth.role,
+    sender_name: displayName(auth.profile),
+    message_body: `${displayName(auth.profile)} marked this conversation as complete.`,
+    message_type: 'system',
+    is_internal: false,
+  });
+
+  const { data: updated, error } = await supabaseAdmin
+    .from('ticket_message_threads')
+    .update({ status: 'closed', last_message_at: now, updated_at: now })
+    .eq('id', thread.id)
+    .select(threadSelect)
+    .single();
+
+  if (error) throw new Error(error.message);
+  return updated as unknown as TicketMessageThread;
+}
+
+// Reverses completeTicketThread — reopens messaging if a CSR closed it by mistake.
+export async function reopenTicketThread(
+  supabaseAdmin: SupabaseClient,
+  auth: AuthContext,
+  threadId: string,
+) {
+  if (auth.role === 'customer') {
+    throw new Error('Only CSR staff can reopen a conversation.');
+  }
+
+  const thread = await getThreadForAccess(supabaseAdmin, auth, threadId);
+  if (thread.status !== 'closed') return thread;
+
+  const now = new Date().toISOString();
+
+  await supabaseAdmin.from('ticket_messages').insert({
+    thread_id: thread.id,
+    request_id: thread.request_id,
+    sender_profile_id: localProfileId(auth),
+    sender_role: auth.role,
+    sender_name: displayName(auth.profile),
+    message_body: `${displayName(auth.profile)} reopened this conversation.`,
+    message_type: 'system',
+    is_internal: false,
+  });
+
+  const { data: updated, error } = await supabaseAdmin
+    .from('ticket_message_threads')
+    .update({ status: 'open', last_message_at: now, updated_at: now })
+    .eq('id', thread.id)
+    .select(threadSelect)
+    .single();
+
+  if (error) throw new Error(error.message);
+  return updated as unknown as TicketMessageThread;
 }

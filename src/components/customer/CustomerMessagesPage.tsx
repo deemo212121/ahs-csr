@@ -54,16 +54,11 @@ type TicketThread = {
   latest_message: ThreadMessage | null;
 };
 
-const CLOSED_TICKET_STATUSES = new Set([
-  'cl-cancelled',
-  'cl-claimed',
-  'cl-data-closed',
-  'cl-ready to complete',
-  'cl-need cancel',
-]);
-
+// Locking is a manual CSR action (Mark Complete / Unmark Complete) — the ER
+// ticket's own status changes still flow in as automatic chat updates, but
+// never lock messaging on their own.
 function isThreadLocked(thread: TicketThread) {
-  return thread.status === 'closed' || CLOSED_TICKET_STATUSES.has((thread.ticket_status ?? '').trim().toLowerCase());
+  return thread.status === 'closed';
 }
 
 const quickReplies = [
@@ -180,7 +175,7 @@ export function CustomerMessagesPage() {
     const timer = window.setInterval(() => {
       void loadThreads(true);
       if (selectedThread?.id) void loadMessages(selectedThread.id, true);
-    }, 30000);
+    }, 4000);
     return () => window.clearInterval(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedThread?.id, user?.uid]);
@@ -245,7 +240,7 @@ export function CustomerMessagesPage() {
                 {messages.map((message) => {
                   const mine = message.sender_profile_id === profile?.id;
                   return (
-                    <div className={`chat-bubble ${mine ? 'sent' : 'received'} ${message.message_type === 'system' ? 'system' : ''}`} key={message.id}>
+                    <div className={`chat-bubble ${mine ? 'sent' : 'received'} ${message.message_type === 'system' || message.message_type === 'ticket_update' ? 'system' : ''}`} key={message.id}>
                       <strong>{message.sender_name}</strong>
                       <p>{message.message_body}</p>
                       <small>{formatDate(message.created_at)}</small>
@@ -255,7 +250,7 @@ export function CustomerMessagesPage() {
               </div>
               {isThreadLocked(selectedThread) ? (
                 <div className="ticket-chat-closed-notice">
-                  This ticket is completed. Messaging is now closed.
+                  This conversation has been marked complete. Messaging is now closed.
                 </div>
               ) : (
                 <>

@@ -1,6 +1,6 @@
 'use client';
 
-import { CalendarDays, ClipboardList, MessageSquare, Pencil, Send, Trash2 } from 'lucide-react';
+import { CalendarDays, CheckCircle2, ClipboardList, MessageSquare, Pencil, RotateCcw, Send, Trash2 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '@/components/AuthProvider';
 import { fetchJsonWithFirebase } from '@/lib/auth/client';
@@ -53,20 +53,16 @@ type TicketThread = {
   ticket_status: string | null;
   last_message_at: string | null;
   created_at: string;
+  updated_at: string;
   request: ThreadRequest | null;
   latest_message: ThreadMessage | null;
 };
 
-const CLOSED_TICKET_STATUSES = new Set([
-  'cl-cancelled',
-  'cl-claimed',
-  'cl-data-closed',
-  'cl-ready to complete',
-  'cl-need cancel',
-]);
-
+// Locking is a manual CSR action (see the "Mark Complete" button) — the ER
+// ticket's own status changes still flow in as automatic chat updates, but
+// no longer close the conversation on their own.
 function isThreadLocked(thread: TicketThread) {
-  return thread.status === 'closed' || CLOSED_TICKET_STATUSES.has((thread.ticket_status ?? '').trim().toLowerCase());
+  return thread.status === 'closed';
 }
 
 function formatDate(value?: string | null) {
@@ -98,9 +94,8 @@ export function InternalMessagesPage({
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [threadLoading, setThreadLoading] = useState(false);
+  const [completingThread, setCompletingThread] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [diagnostics, setDiagnostics] = useState<unknown>(null);
-  const [diagnosticsLoading, setDiagnosticsLoading] = useState(false);
   const [automatedChatOpen, setAutomatedChatOpen] = useState(false);
   const [automatedChatDraft, setAutomatedChatDraft] = useState('');
   const [automatedChatMessage, setAutomatedChatMessage] = useState<string | null>(null);
@@ -218,20 +213,6 @@ export function InternalMessagesPage({
     }
   }
 
-  async function runDiagnostics() {
-    if (!user) return;
-    setDiagnosticsLoading(true);
-    setDiagnostics(null);
-    try {
-      const data = await fetchJsonWithFirebase(user, '/api/messages/diagnostics');
-      setDiagnostics(data);
-    } catch (err) {
-      setDiagnostics({ message: err instanceof Error ? err.message : 'Diagnostics failed.' });
-    } finally {
-      setDiagnosticsLoading(false);
-    }
-  }
-
   async function loadMessages(threadId: string, silent = false) {
     if (!user) return;
     if (!silent) setThreadLoading(true);
@@ -262,6 +243,46 @@ export function InternalMessagesPage({
     }
   }
 
+  async function markThreadComplete() {
+    if (!user || !activeThread || completingThread) return;
+    const confirmed = window.confirm(
+      `Mark this conversation with ${activeThread.request?.full_name || 'this customer'} as complete? This will close messaging for both sides.`,
+    );
+    if (!confirmed) return;
+    setCompletingThread(true);
+    try {
+      await fetchJsonWithFirebase(user, `/api/messages/threads/${activeThread.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ action: 'complete' }),
+      });
+      await Promise.all([loadMessages(activeThread.id), loadThreads()]);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unable to complete this conversation.');
+    } finally {
+      setCompletingThread(false);
+    }
+  }
+
+  async function reopenThread() {
+    if (!user || !activeThread || completingThread) return;
+    const confirmed = window.confirm(
+      `Reopen messaging with ${activeThread.request?.full_name || 'this customer'}?`,
+    );
+    if (!confirmed) return;
+    setCompletingThread(true);
+    try {
+      await fetchJsonWithFirebase(user, `/api/messages/threads/${activeThread.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ action: 'reopen' }),
+      });
+      await Promise.all([loadMessages(activeThread.id), loadThreads()]);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unable to reopen this conversation.');
+    } finally {
+      setCompletingThread(false);
+    }
+  }
+
   useEffect(() => {
     loadThreads();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -281,7 +302,7 @@ export function InternalMessagesPage({
     const timer = window.setInterval(() => {
       void loadThreads(true);
       if (activeThread?.id) void loadMessages(activeThread.id, true);
-    }, 30000);
+    }, 4000);
     return () => window.clearInterval(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeThread?.id, user?.uid]);
@@ -293,21 +314,9 @@ export function InternalMessagesPage({
           <h1 className="page-title">{title}</h1>
           <p className="muted">{description}</p>
         </div>
-        <button className="btn btn-secondary" disabled={diagnosticsLoading} onClick={() => void runDiagnostics()} type="button">
-          {diagnosticsLoading ? 'Running diagnostics...' : 'Run Diagnostics'}
-        </button>
       </div>
 
       {error ? <div className="form-error">{error}</div> : null}
-      {diagnostics ? (
-        <div className="message-diagnostics-panel">
-          <div className="message-diagnostics-head">
-            <strong>Diagnostics</strong>
-            <button onClick={() => setDiagnostics(null)} type="button">Close</button>
-          </div>
-          <pre>{JSON.stringify(diagnostics, null, 2)}</pre>
-        </div>
-      ) : null}
 
       <section className="leadership-messages-layout ticket-messages-layout">
         <div className="agent-table-panel ticket-thread-panel">
@@ -357,9 +366,9 @@ export function InternalMessagesPage({
                 {threadLoading ? <div className="message-empty-state">Opening conversation...</div> : null}
                 {!threadLoading && !messages.length ? <div className="message-empty-state">No messages yet.</div> : null}
                 {messages.map((message) => {
-                  const mine = message.sender_profile_id === profile?.id;
+                  const isCustomer = message.sender_role === 'customer';
                   return (
-                    <div className={`chat-bubble ${mine ? 'sent' : 'received'} ${message.message_type === 'system' ? 'system' : ''}`} key={message.id}>
+                    <div className={`chat-bubble ${isCustomer ? 'received' : 'sent'} ${message.message_type === 'system' || message.message_type === 'ticket_update' ? 'system' : ''}`} key={message.id}>
                       <strong>{message.sender_name}</strong>
                       <p>{message.message_body}</p>
                       <small>{formatDate(message.created_at)}</small>
@@ -369,7 +378,16 @@ export function InternalMessagesPage({
               </div>
               {isThreadLocked(activeThread) ? (
                 <div className="ticket-chat-closed-notice">
-                  This ticket is completed. Messaging is now closed.
+                  This conversation has been marked complete. Messaging is now closed.
+                  <button
+                    className="btn btn-secondary ticket-chat-complete-btn"
+                    disabled={completingThread}
+                    onClick={() => void reopenThread()}
+                    title="Reopen this conversation"
+                    type="button"
+                  >
+                    <RotateCcw size={16} /> {completingThread ? 'Reopening...' : 'Unmark Complete'}
+                  </button>
                 </div>
               ) : (
                 <div className="leadership-chat-compose ticket-chat-compose">
@@ -387,6 +405,15 @@ export function InternalMessagesPage({
                   />
                   <button className="btn btn-primary" disabled={!draft.trim()} onClick={() => void sendMessage()} type="button">
                     <Send size={16} /> Send
+                  </button>
+                  <button
+                    className="btn btn-secondary ticket-chat-complete-btn"
+                    disabled={completingThread}
+                    onClick={() => void markThreadComplete()}
+                    title="Mark this conversation as complete and close messaging"
+                    type="button"
+                  >
+                    <CheckCircle2 size={16} /> {completingThread ? 'Completing...' : 'Mark Complete'}
                   </button>
                 </div>
               )}

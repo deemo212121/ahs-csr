@@ -131,7 +131,7 @@ var BucketCachePurge = class extends DurableObject {
     for (const tag of tags) {
       this.ctx.storage.sql.exec(`
         INSERT OR REPLACE INTO cache_purge (tag)
-        VALUES (?)`, [tag]);
+        VALUES (?)`, tag);
     }
     const nextAlarm = await this.ctx.storage.getAlarm();
     if (!nextAlarm) {
@@ -153,7 +153,7 @@ var BucketCachePurge = class extends DurableObject {
       this.ctx.storage.sql.exec(`
         DELETE FROM cache_purge
         WHERE tag IN (${tags.map(() => "?").join(",")})
-      `, tags.map((row) => row.tag));
+      `, ...tags.map((row) => row.tag));
       if (tags.length < MAX_NUMBER_OF_TAGS_PER_PURGE) {
         tags = [];
       } else {
@@ -161,7 +161,7 @@ var BucketCachePurge = class extends DurableObject {
           SELECT * FROM cache_purge LIMIT ${MAX_NUMBER_OF_TAGS_PER_PURGE}
         `).toArray();
       }
-    } while (tags.length >= 0);
+    } while (tags.length > 0);
   }
 };
 export {
