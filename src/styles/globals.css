@@ -35,6 +35,15 @@
   justify-content: space-between;
   min-height: 150px;
   padding: 26px;
+  position: relative;
+}
+
+.customer-call-refresh-btn {
+  height: 32px;
+  position: absolute;
+  right: 14px;
+  top: 14px;
+  width: 32px;
 }
 
 .call-hero-panel h1,
@@ -737,16 +746,35 @@
   display: block;
 }
 
-.customer-call-action-panel {
-  align-items: center;
+.customer-call-row {
+  align-items: stretch;
   display: flex;
-  justify-content: space-between;
+  gap: 14px;
+}
+
+.customer-call-row > * {
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  height: 320px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.customer-call-action-panel {
+  gap: 12px;
+  justify-content: flex-start;
+}
+
+.customer-call-action-panel > div:first-child {
+  min-width: 0;
 }
 
 .customer-call-action-panel h2 {
   align-items: center;
   color: #fff;
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
   margin: 0 0 6px;
 }
@@ -756,38 +784,31 @@
   margin: 0;
 }
 
+.customer-call-actions {
+  flex-direction: column;
+  gap: 8px;
+  margin-top: auto;
+}
+
+.customer-call-actions .cx-action-btn {
+  flex: none;
+  font-size: 0.8rem;
+  gap: 8px;
+  min-height: 36px;
+  padding: 8px 10px;
+  width: 100%;
+}
+
+.customer-call-waiting-card {
+  align-items: center;
+  justify-content: center;
+}
+
 .cx-action-btn.danger {
   border-color: rgba(248, 113, 113, 0.42);
   color: #ffd1d1;
 }
 
-.customer-call-history {
-  display: grid;
-  gap: 10px;
-}
-
-.customer-call-history article {
-  align-items: center;
-  background: rgba(6, 24, 54, 0.82);
-  border: 1px solid rgba(84, 161, 255, 0.18);
-  border-radius: 14px;
-  display: flex;
-  gap: 12px;
-  padding: 13px;
-}
-
-.customer-call-history strong {
-  color: #f8fbff;
-  display: block;
-}
-
-.customer-call-history small {
-  align-items: center;
-  color: #aabbd7;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 5px;
-}
 
 .call-manual-backdrop {
   align-items: stretch;
@@ -1190,6 +1211,52 @@ a {
 .field textarea {
   min-height: 94px;
   resize: vertical;
+}
+
+.manual-customer-search {
+  position: relative;
+}
+
+.manual-customer-dropdown {
+  background: #0f1b30;
+  border: 1px solid rgba(101, 142, 190, 0.4);
+  border-radius: 10px;
+  box-shadow: 0 14px 30px rgba(0, 0, 0, 0.35);
+  display: grid;
+  gap: 2px;
+  left: 0;
+  max-height: 220px;
+  overflow-y: auto;
+  padding: 6px;
+  position: absolute;
+  right: 0;
+  top: calc(100% + 4px);
+  z-index: 40;
+}
+
+.manual-customer-dropdown button {
+  background: transparent;
+  border: 0;
+  border-radius: 8px;
+  cursor: pointer;
+  display: grid;
+  gap: 2px;
+  padding: 8px 10px;
+  text-align: left;
+}
+
+.manual-customer-dropdown button:hover {
+  background: rgba(101, 142, 190, 0.18);
+}
+
+.manual-customer-dropdown button strong {
+  color: #f8fafc;
+  font-size: 0.85rem;
+}
+
+.manual-customer-dropdown button span {
+  color: #94a3b8;
+  font-size: 0.76rem;
 }
 
 .button-row {
@@ -2435,6 +2502,10 @@ a {
   padding: 14px;
 }
 
+.cx-chat-back-btn {
+  display: none;
+}
+
 .customer-message-head span,
 .customer-chat-head span {
   color: var(--customer-muted);
@@ -2925,7 +2996,7 @@ a {
 }
 
 .admin-stats-grid {
-  grid-template-columns: repeat(6, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
 }
 
 .admin-stat-card,
@@ -4958,10 +5029,27 @@ h1, h2, h3, h4, h5, h6,
 
 .admin-activity-filter {
   align-items: center;
-  display: grid;
+  display: flex;
+  flex-wrap: wrap;
   gap: 10px;
-  grid-template-columns: minmax(0, 1fr) 175px 145px;
   padding: 14px;
+}
+
+.admin-activity-filter input[type="text"],
+.admin-activity-filter input:not([type]) {
+  flex: 1 1 220px;
+}
+
+.admin-activity-filter input[type="date"] {
+  flex: 0 1 150px;
+}
+
+.admin-activity-filter select {
+  flex: 0 1 175px;
+}
+
+.admin-activity-filter button {
+  flex: 0 0 auto;
 }
 
 .admin-log-list {
@@ -8357,12 +8445,12 @@ html[data-theme="light"] .notification-toast-close:hover {
 }
 
 .cx-my-request-stats {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .cx-my-request-stats > div {
-  min-height: 72px;
-  padding: 16px;
+  min-height: 56px;
+  padding: 12px;
   text-align: center;
 }
 
@@ -8582,6 +8670,32 @@ html[data-theme="light"] .notification-toast-close:hover {
   width: calc(100% - 36px);
 }
 
+.cx-saved-toast {
+  animation: cx-saved-toast-in 0.2s ease-out;
+  background: linear-gradient(135deg, rgba(20, 184, 166, 0.95), rgba(14, 165, 233, 0.95));
+  border-radius: 12px;
+  bottom: calc(100px + env(safe-area-inset-bottom));
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.3);
+  color: #02111f;
+  font-weight: 900;
+  left: 50%;
+  padding: 12px 20px;
+  position: fixed;
+  transform: translateX(-50%);
+  z-index: 60;
+}
+
+@keyframes cx-saved-toast-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 10px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+}
+
 @media (max-width: 1024px) {
   .customer-topbar {
     padding: 0 14px;
@@ -8601,17 +8715,26 @@ html[data-theme="light"] .notification-toast-close:hover {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .cx-messages-layout,
+  .cx-chat-panel {
+    max-height: calc(100vh - 220px);
+  }
+
   .cx-messages-layout {
     grid-template-columns: 1fr;
+    min-height: calc(100vh - 220px);
   }
 
-  .cx-message-list {
-    display: flex;
-    overflow-x: auto;
+  .cx-messages-layout.cx-mobile-chat .cx-message-requests {
+    display: none;
   }
 
-  .cx-message-list button {
-    min-width: 260px;
+  .cx-messages-layout.cx-mobile-list .cx-chat-panel {
+    display: none;
+  }
+
+  .cx-chat-back-btn {
+    display: inline-flex;
   }
 }
 
@@ -8657,30 +8780,79 @@ html[data-theme="light"] .notification-toast-close:hover {
     width: min(330px, calc(100vw - 20px));
   }
 
+  .cx-welcome-panel {
+    padding: 14px;
+  }
+
   .cx-welcome-profile {
     align-items: flex-start;
+    flex-direction: column;
+    gap: 10px;
   }
 
   .cx-welcome-profile img {
-    height: 76px;
-    width: 76px;
+    height: 64px;
+    width: 64px;
   }
 
-  .cx-primary-actions,
-  .cx-recent-card,
+  .cx-welcome-profile div {
+    min-width: 0;
+    width: 100%;
+  }
+
+  .cx-welcome-profile h1 {
+    font-size: 1.1rem;
+  }
+
+  .cx-welcome-profile p {
+    font-size: 0.82rem;
+    overflow-wrap: anywhere;
+  }
+
+  .cx-recent-card {
+    flex-wrap: wrap;
+    gap: 10px;
+    min-height: 0;
+    padding: 12px;
+  }
+
+  .cx-recent-card div {
+    flex-basis: calc(100% - 58px);
+  }
+
+  .cx-recent-card .cx-status-pill {
+    margin-left: 58px;
+  }
+
   .cx-request-footer {
     align-items: stretch;
     flex-direction: column;
   }
 
-  .cx-stat-grid,
-  .cx-shortcut-grid,
-  .cx-my-request-stats,
-  .cx-profile-form {
-    grid-template-columns: 1fr;
+  .cx-primary-actions {
+    gap: 8px;
   }
 
+  .cx-action-btn {
+    flex: 1 1 0;
+    font-size: 0.82rem;
+    gap: 6px;
+    min-height: 42px;
+    padding: 8px;
+  }
+
+  .cx-hero-question {
+    font-size: 1.1rem;
+    margin: 14px 0 12px;
+  }
+
+  .cx-stat-grid,
+  .cx-shortcut-grid,
   .cx-service-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .cx-profile-form {
     grid-template-columns: 1fr;
   }
 
@@ -8696,6 +8868,77 @@ html[data-theme="light"] .notification-toast-close:hover {
 
   .request-section .form-grid {
     grid-template-columns: 1fr;
+  }
+
+  .customer-call-hero {
+    border-radius: 16px;
+    gap: 14px;
+    min-height: 0;
+    padding: 16px;
+  }
+
+  .customer-call-hero h1 {
+    font-size: 1.4rem;
+    margin: 4px 0;
+  }
+
+  .customer-call-hero p {
+    font-size: 0.82rem;
+  }
+
+  .customer-call-status-card {
+    min-width: 0;
+    padding: 12px;
+    width: 100%;
+  }
+
+  .customer-call-page {
+    padding: 0 4px;
+  }
+
+  .customer-call-row {
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .customer-call-row > * {
+    height: auto;
+    min-height: 200px;
+    width: 100%;
+  }
+
+  .customer-call-action-panel,
+  .customer-call-waiting-card {
+    padding: 16px;
+  }
+
+  .customer-call-actions {
+    gap: 10px;
+  }
+
+  .customer-call-actions .cx-action-btn {
+    min-height: 42px;
+  }
+
+  .customer-call-waiting-card > svg {
+    height: 48px;
+    margin-bottom: 8px;
+    padding: 12px;
+    width: 48px;
+  }
+
+  .webrtc-avatar-ring {
+    height: 72px;
+    width: 72px;
+  }
+
+  .webrtc-call-stage {
+    gap: 12px;
+    margin: 16px 0;
+  }
+
+  .webrtc-room-card {
+    padding: 14px;
   }
 }
 
@@ -9119,8 +9362,47 @@ html[data-theme="light"] .notification-toast-close:hover {
   overflow-wrap: anywhere;
 }
 
+.verification-edit-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.verification-edit-grid label {
+  color: #94a3b8;
+  display: grid;
+  font-size: 0.72rem;
+  font-weight: 900;
+  gap: 6px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.verification-edit-grid label.wide {
+  grid-column: 1 / -1;
+}
+
+.verification-edit-grid input,
+.verification-edit-grid textarea {
+  background: rgba(2, 6, 23, 0.45);
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 8px;
+  color: #e5e7eb;
+  font-size: 0.85rem;
+  font-weight: 500;
+  padding: 8px 10px;
+  text-transform: none;
+}
+
+.verification-edit-grid textarea {
+  resize: vertical;
+}
+
 @media (max-width: 900px) {
   .er-ticket-detail-grid {
+    grid-template-columns: 1fr;
+  }
+  .verification-edit-grid {
     grid-template-columns: 1fr;
   }
   .er-ticket-modal-card {
@@ -13974,6 +14256,12 @@ html[data-theme="light"] .csr-summary-notes p {
     height: 34px;
     width: 34px;
   }
+
+  .cx-stat-grid,
+  .cx-shortcut-grid,
+  .cx-service-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 /* Persistent branch checkbox dropdown for CSR / TL / Manager ticket lists */
@@ -14640,18 +14928,6 @@ html[data-theme="light"] .customer-call-action-panel p {
 
 html[data-theme="light"] .cx-action-btn.danger {
   color: #0f172a;
-}
-
-html[data-theme="light"] .customer-call-history article {
-  background: #ffffff;
-}
-
-html[data-theme="light"] .customer-call-history strong {
-  color: #0f172a;
-}
-
-html[data-theme="light"] .customer-call-history small {
-  color: #4B5563;
 }
 
 html[data-theme="light"] .call-manual-panel {

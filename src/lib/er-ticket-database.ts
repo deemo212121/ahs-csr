@@ -526,6 +526,23 @@ function splitFullName(fullName: string) {
   };
 }
 
+function normalizeNameForMatch(value: unknown) {
+  return nullableText(value)?.trim().toLowerCase().replace(/\s+/g, ' ') ?? '';
+}
+
+// A matched customer row is only reused if its stored name still agrees with
+// this submission's name. Tickets must permanently reflect the exact info
+// submitted at the time — reusing a phone/email match whose name has since
+// diverged (e.g. two different accounts sharing a test phone number) would
+// silently relabel the new ticket with an old, unrelated customer's name.
+// Previous tickets are never touched either way; a name mismatch just means
+// this submission gets its own new ER customer record instead of the old one.
+function customerRowMatchesSubmission(row: Record<string, unknown>, portalRow: PortalTicketRequestRow) {
+  const existingName = normalizeNameForMatch(row.full_name);
+  const submittedName = normalizeNameForMatch(portalRow.full_name);
+  return !existingName || !submittedName || existingName === submittedName;
+}
+
 async function findExistingErCustomerId(
   erSupabase: SupabaseClient,
   portalRow: PortalTicketRequestRow,
@@ -537,41 +554,44 @@ async function findExistingErCustomerId(
   if (email) {
     const { data, error } = await erSupabase
       .from(getErCustomersTable())
-      .select('id, company_id')
+      .select('id, company_id, full_name')
       .eq('company_id', companyId)
       .ilike('email', email)
       .limit(1)
       .maybeSingle();
 
     if (error) throw new Error(`ER customer email lookup failed: ${error.message}`);
-    const id = cleanUuidCandidate((data as Record<string, unknown> | null)?.id);
-    if (id) return id;
+    const row = data as Record<string, unknown> | null;
+    const id = cleanUuidCandidate(row?.id);
+    if (id && row && customerRowMatchesSubmission(row, portalRow)) return id;
   }
 
   for (const phone of phoneCandidates) {
     const { data, error } = await erSupabase
       .from(getErCustomersTable())
-      .select('id, company_id')
+      .select('id, company_id, full_name')
       .eq('company_id', companyId)
       .eq('phone', phone)
       .limit(1)
       .maybeSingle();
 
     if (error) throw new Error(`ER customer phone lookup failed: ${error.message}`);
-    const id = cleanUuidCandidate((data as Record<string, unknown> | null)?.id);
-    if (id) return id;
+    const row = data as Record<string, unknown> | null;
+    const id = cleanUuidCandidate(row?.id);
+    if (id && row && customerRowMatchesSubmission(row, portalRow)) return id;
 
     const { data: secondPhoneData, error: secondPhoneError } = await erSupabase
       .from(getErCustomersTable())
-      .select('id, company_id')
+      .select('id, company_id, full_name')
       .eq('company_id', companyId)
       .eq('second_phone', phone)
       .limit(1)
       .maybeSingle();
 
     if (secondPhoneError) throw new Error(`ER customer second phone lookup failed: ${secondPhoneError.message}`);
-    const secondPhoneId = cleanUuidCandidate((secondPhoneData as Record<string, unknown> | null)?.id);
-    if (secondPhoneId) return secondPhoneId;
+    const secondPhoneRow = secondPhoneData as Record<string, unknown> | null;
+    const secondPhoneId = cleanUuidCandidate(secondPhoneRow?.id);
+    if (secondPhoneId && secondPhoneRow && customerRowMatchesSubmission(secondPhoneRow, portalRow)) return secondPhoneId;
   }
 
   return null;
@@ -1106,6 +1126,47 @@ export async function createErModePortalRequest(context: AuthContext, body: Crea
   }
 
   return mapped;
+}
+
+// Lets staff correct customer-submitted details (address typos, wrong model
+// number, etc.) before approving — only while the request is still pending,
+// since approved requests are already posted into the live ER ticket.
+export async function updateErModePortalRequest(
+  context: AuthContext,
+  requestId: string,
+  patch: Partial<CreatePortalRequestInput>,
+) {
+  const erSupabase = requireErSupabase();
+
+  const { data: existing, error: existingError } = await erSupabase
+    .from(getPortalRequestsTable())
+    .select('id, verification_status')
+    .eq('id', requestId)
+    .maybeSingle();
+
+  if (existingError) throw new Error(existingError.message);
+  if (!existing) throw new Error('Request not found.');
+  if ((existing as Record<string, unknown>).verification_status !== 'pending') {
+    throw new Error('Only pending requests can be edited.');
+  }
+
+  const update: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(patch)) {
+    if (value !== undefined) update[key] = value || null;
+  }
+  if (!Object.keys(update).length) {
+    throw new Error('No changes to save.');
+  }
+
+  const { data, error } = await erSupabase
+    .from(getPortalRequestsTable())
+    .update(update)
+    .eq('id', requestId)
+    .select(portalRequestColumns)
+    .single();
+
+  if (error) throw new Error(error.message);
+  return mapPortalRequest(data as unknown as PortalTicketRequestRow);
 }
 
 export async function markApprovedPortalRequestPendingErPosting(

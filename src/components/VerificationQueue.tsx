@@ -1,6 +1,6 @@
 'use client';
 
-import { CheckCircle2, ChevronLeft, ChevronRight, Copy, ListFilter, RotateCcw, ShieldCheck, X, XCircle } from 'lucide-react';
+import { CheckCircle2, ChevronLeft, ChevronRight, Copy, ListFilter, Pencil, RotateCcw, Save, ShieldCheck, X, XCircle } from 'lucide-react';
 import { useSearchParams } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
 import { useLiveUpdate } from '@/lib/notifications/useLiveUpdate';
@@ -127,12 +127,14 @@ function VerificationDetailsModal({
   onApprove,
   onReject,
   onViewRelated,
+  onEdit,
 }: {
   request: ServiceRequest;
   onClose: () => void;
   onApprove: (request: ServiceRequest) => void;
   onReject: (request: ServiceRequest) => void;
   onViewRelated: (request: ServiceRequest) => void;
+  onEdit: (request: ServiceRequest) => void;
 }) {
   const sections = useMemo<DetailSection[]>(() => ([
     {
@@ -215,6 +217,7 @@ function VerificationDetailsModal({
           ))}
           {request.verification_status === 'pending' ? (
             <div className="verification-modal-actions">
+              <button className="btn btn-secondary" onClick={() => onEdit(request)} type="button"><Pencil size={16} /> Edit Details</button>
               <button className="manager-approve" onClick={() => onApprove(request)} type="button"><CheckCircle2 size={16} /> Approve Request</button>
               <button className="btn-danger" onClick={() => onReject(request)} type="button"><XCircle size={16} /> Reject Request</button>
             </div>
@@ -223,6 +226,154 @@ function VerificationDetailsModal({
         <div className="verification-modal-footer">
           <button className="btn btn-secondary" onClick={() => onViewRelated(request)} type="button">
             <Copy size={15} /> Related Tickets
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+type EditableRequestFields = {
+  full_name: string;
+  phone_number: string;
+  secondary_phone: string;
+  customer_email: string;
+  service_address: string;
+  service_address_2: string;
+  city: string;
+  region: string;
+  state: string;
+  zip_code: string;
+  landmark: string;
+  manual_brand: string;
+  manual_appliance_type: string;
+  model_number: string;
+  serial_number: string;
+  product_model_version: string;
+  issue_description: string;
+  special_request: string;
+  preferred_date: string;
+  preferred_time: string;
+  purchase_date: string;
+  warranty_type: string;
+};
+
+function editableFieldsFromRequest(request: ServiceRequest): EditableRequestFields {
+  return {
+    full_name: request.full_name || '',
+    phone_number: request.phone_number || '',
+    secondary_phone: request.secondary_phone || '',
+    customer_email: request.customer_email || '',
+    service_address: request.service_address || '',
+    service_address_2: request.service_address_2 || '',
+    city: request.city || '',
+    region: request.region || '',
+    state: request.state || '',
+    zip_code: request.zip_code || '',
+    landmark: request.landmark || '',
+    manual_brand: request.manual_brand || '',
+    manual_appliance_type: request.manual_appliance_type || '',
+    model_number: request.model_number || '',
+    serial_number: request.serial_number || '',
+    product_model_version: request.product_model_version || '',
+    issue_description: request.issue_description || '',
+    special_request: request.special_request || '',
+    preferred_date: (request.preferred_date || '').slice(0, 10),
+    preferred_time: request.preferred_time || '',
+    purchase_date: (request.purchase_date || '').slice(0, 10),
+    warranty_type: request.warranty_type || '',
+  };
+}
+
+function EditRequestModal({
+  request,
+  onClose,
+  onSave,
+}: {
+  request: ServiceRequest;
+  onClose: () => void;
+  onSave: (requestId: string, fields: EditableRequestFields) => Promise<void>;
+}) {
+  const [fields, setFields] = useState<EditableRequestFields>(() => editableFieldsFromRequest(request));
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  function set<K extends keyof EditableRequestFields>(key: K, value: EditableRequestFields[K]) {
+    setFields((current) => ({ ...current, [key]: value }));
+  }
+
+  async function handleSave() {
+    setSaving(true);
+    setError(null);
+    try {
+      await onSave(request.id, fields);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unable to save changes.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="er-ticket-modal-backdrop" role="dialog" aria-modal="true" aria-label={`Edit request ${request.request_number}`}>
+      <div className="er-ticket-modal-card">
+        <div className="er-ticket-modal-head">
+          <div>
+            <span>Edit Pending Request</span>
+            <h3>{request.request_number}</h3>
+            <p>Correct any details before approving. Only pending requests can be edited.</p>
+          </div>
+          <button className="er-ticket-modal-close" onClick={onClose} type="button" aria-label="Close edit form">
+            <X size={18} />
+          </button>
+        </div>
+        <div className="er-ticket-modal-body">
+          {error ? <div className="danger-text">{error}</div> : null}
+
+          <section className="er-ticket-detail-section">
+            <h4>Customer Information</h4>
+            <div className="verification-edit-grid">
+              <label>Customer Name<input value={fields.full_name} onChange={(event) => set('full_name', event.target.value)} /></label>
+              <label>Phone<input value={fields.phone_number} onChange={(event) => set('phone_number', event.target.value)} /></label>
+              <label>Secondary Phone<input value={fields.secondary_phone} onChange={(event) => set('secondary_phone', event.target.value)} /></label>
+              <label>Email<input value={fields.customer_email} onChange={(event) => set('customer_email', event.target.value)} /></label>
+              <label>Service Address<input value={fields.service_address} onChange={(event) => set('service_address', event.target.value)} /></label>
+              <label>Address Line 2<input value={fields.service_address_2} onChange={(event) => set('service_address_2', event.target.value)} /></label>
+              <label>City<input value={fields.city} onChange={(event) => set('city', event.target.value)} /></label>
+              <label>State<input value={fields.state} onChange={(event) => set('state', event.target.value)} /></label>
+              <label>ZIP<input value={fields.zip_code} onChange={(event) => set('zip_code', event.target.value)} /></label>
+              <label>Branch / Region<input value={fields.region} onChange={(event) => set('region', event.target.value)} /></label>
+              <label>Landmark / Address Note<input value={fields.landmark} onChange={(event) => set('landmark', event.target.value)} /></label>
+            </div>
+          </section>
+
+          <section className="er-ticket-detail-section">
+            <h4>Product / Appliance</h4>
+            <div className="verification-edit-grid">
+              <label>Manufacturer / Brand<input value={fields.manual_brand} onChange={(event) => set('manual_brand', event.target.value)} /></label>
+              <label>Product<input value={fields.manual_appliance_type} onChange={(event) => set('manual_appliance_type', event.target.value)} /></label>
+              <label>Model<input value={fields.model_number} onChange={(event) => set('model_number', event.target.value)} /></label>
+              <label>Model Version<input value={fields.product_model_version} onChange={(event) => set('product_model_version', event.target.value)} /></label>
+              <label>Serial<input value={fields.serial_number} onChange={(event) => set('serial_number', event.target.value)} /></label>
+              <label>Purchase Date<input type="date" value={fields.purchase_date} onChange={(event) => set('purchase_date', event.target.value)} /></label>
+              <label>Warranty<input value={fields.warranty_type} onChange={(event) => set('warranty_type', event.target.value)} /></label>
+            </div>
+          </section>
+
+          <section className="er-ticket-detail-section">
+            <h4>Schedule / Request Details</h4>
+            <div className="verification-edit-grid">
+              <label>Preferred Date<input type="date" value={fields.preferred_date} onChange={(event) => set('preferred_date', event.target.value)} /></label>
+              <label>Preferred Time<input value={fields.preferred_time} onChange={(event) => set('preferred_time', event.target.value)} /></label>
+              <label className="wide">Issue Description<textarea rows={2} value={fields.issue_description} onChange={(event) => set('issue_description', event.target.value)} /></label>
+              <label className="wide">Special Request / Internal Note<textarea rows={2} value={fields.special_request} onChange={(event) => set('special_request', event.target.value)} /></label>
+            </div>
+          </section>
+        </div>
+        <div className="verification-modal-footer">
+          <button className="btn btn-secondary" onClick={onClose} type="button">Cancel</button>
+          <button className="btn btn-primary" disabled={saving} onClick={() => void handleSave()} type="button">
+            <Save size={16} /> {saving ? 'Saving...' : 'Save Changes'}
           </button>
         </div>
       </div>
@@ -251,6 +402,11 @@ export function VerificationQueue() {
   const [section, setSection] = useState<Section>('queue');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [relatedFocusRequest, setRelatedFocusRequest] = useState<ServiceRequest | null>(null);
+  const [editingRequest, setEditingRequest] = useState<ServiceRequest | null>(null);
+  const [relatedTicketQuery, setRelatedTicketQuery] = useState('');
+  const [relatedNameQuery, setRelatedNameQuery] = useState('');
+  const [relatedSerialQuery, setRelatedSerialQuery] = useState('');
+  const [relatedPhoneQuery, setRelatedPhoneQuery] = useState('');
 
   async function load() {
     if (!user) return;
@@ -347,6 +503,18 @@ export function VerificationQueue() {
     } finally {
       setRestoringId(null);
     }
+  }
+
+  async function saveRequestEdits(requestId: string, fields: EditableRequestFields) {
+    if (!user) return;
+    await fetchJsonWithFirebase(user, `/api/service-requests/${requestId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(fields),
+    });
+    setMessageTone('success');
+    setMessage('Request details updated.');
+    setEditingRequest(null);
+    await load();
   }
 
   async function postApprovedToErTicket(request: ServiceRequest) {
@@ -465,6 +633,44 @@ export function VerificationQueue() {
       .map((request) => ({ request, matches: findRelatedTickets(request, ticketBoard) }))
       .filter((entry) => entry.matches.length > 0);
   }, [pendingRequests, ticketBoard]);
+
+  const relatedEntries = useMemo(
+    () => (relatedFocusRequest ? [{ request: relatedFocusRequest, matches: focusedRelatedMatches || [] }] : relatedResults),
+    [relatedFocusRequest, focusedRelatedMatches, relatedResults],
+  );
+
+  const filteredRelatedEntries = useMemo(() => {
+    const ticketNeedle = normalize(relatedTicketQuery);
+    const nameNeedle = normalize(relatedNameQuery);
+    const serialNeedle = normalize(relatedSerialQuery);
+    const phoneNeedle = normalize(relatedPhoneQuery);
+    if (!ticketNeedle && !nameNeedle && !serialNeedle && !phoneNeedle) return relatedEntries;
+
+    return relatedEntries
+      .map(({ request, matches }) => {
+        const filteredMatches = matches.filter(({ ticket }) => {
+          if (ticketNeedle) {
+            const haystack = `${normalize(request.request_number)} ${normalize(ticketBoardNo(ticket))}`;
+            if (!haystack.includes(ticketNeedle)) return false;
+          }
+          if (nameNeedle) {
+            const haystack = `${normalize(request.full_name)} ${normalize(ticket.er_ticket?.customer_name || ticket.full_name)}`;
+            if (!haystack.includes(nameNeedle)) return false;
+          }
+          if (serialNeedle) {
+            const haystack = `${normalize(request.serial_number)} ${normalize(ticket.er_ticket?.serial)}`;
+            if (!haystack.includes(serialNeedle)) return false;
+          }
+          if (phoneNeedle) {
+            const haystack = `${normalize(request.phone_number)} ${normalize(ticket.er_ticket?.customer_phone)}`;
+            if (!haystack.includes(phoneNeedle)) return false;
+          }
+          return true;
+        });
+        return { request, matches: filteredMatches };
+      })
+      .filter((entry) => entry.matches.length > 0);
+  }, [relatedEntries, relatedTicketQuery, relatedNameQuery, relatedSerialQuery, relatedPhoneQuery]);
 
   const stats = useMemo(() => ({
     pending: allRequests.filter((request) => request.verification_status === 'pending').length,
@@ -641,6 +847,7 @@ export function VerificationQueue() {
                         <td><span className="manager-status-pill new">Pending</span></td>
                         <td>
                           <div className="manager-stack-actions">
+                            <button className="btn btn-secondary" onClick={() => setEditingRequest(request)} type="button"><Pencil size={15} /> Edit</button>
                             <button className="manager-approve" onClick={() => review(request, 'approve')} type="button"><CheckCircle2 size={15} /> Approve</button>
                             <button className="btn-danger" onClick={() => review(request, 'reject')} type="button"><XCircle size={15} /> Reject</button>
                           </div>
@@ -672,15 +879,35 @@ export function VerificationQueue() {
                     Show All Pending
                   </button>
                 ) : (
-                  <span>{relatedResults.length} flagged</span>
+                  <span>{filteredRelatedEntries.length} flagged</span>
                 )}
               </div>
             </div>
+
+            <section className="manager-verification-filters">
+              <div className="field"><label>Ticket #</label><input value={relatedTicketQuery} onChange={(event) => setRelatedTicketQuery(event.target.value)} placeholder="Ticket number" /></div>
+              <div className="field"><label>Name</label><input value={relatedNameQuery} onChange={(event) => setRelatedNameQuery(event.target.value)} placeholder="Customer name" /></div>
+              <div className="field"><label>Serial Number</label><input value={relatedSerialQuery} onChange={(event) => setRelatedSerialQuery(event.target.value)} placeholder="Serial number" /></div>
+              <div className="field"><label>Phone Number</label><input value={relatedPhoneQuery} onChange={(event) => setRelatedPhoneQuery(event.target.value)} placeholder="Phone number" /></div>
+              <button
+                className="btn btn-secondary"
+                onClick={() => {
+                  setRelatedTicketQuery('');
+                  setRelatedNameQuery('');
+                  setRelatedSerialQuery('');
+                  setRelatedPhoneQuery('');
+                }}
+                type="button"
+              >
+                Clear
+              </button>
+            </section>
+
             {ticketBoardLoading ? (
               <div className="manager-empty-cell">Loading the branch ticket list to compare against...</div>
-            ) : (relatedFocusRequest ? [{ request: relatedFocusRequest, matches: focusedRelatedMatches || [] }] : relatedResults).some((entry) => entry.matches.length > 0) ? (
+            ) : filteredRelatedEntries.some((entry) => entry.matches.length > 0) ? (
               <div className="verification-related-list">
-                {(relatedFocusRequest ? [{ request: relatedFocusRequest, matches: focusedRelatedMatches || [] }] : relatedResults).map(({ request, matches }) => (
+                {filteredRelatedEntries.map(({ request, matches }) => (
                   <div className="verification-related-card" key={request.id}>
                     <div className="verification-related-source">
                       <span className="er-columns-pill">Pending Request</span>
@@ -777,6 +1004,18 @@ export function VerificationQueue() {
           onApprove={(request) => void review(request, 'approve')}
           onReject={(request) => void review(request, 'reject')}
           onViewRelated={viewRelatedTickets}
+          onEdit={(request) => {
+            setSelectedRequest(null);
+            setEditingRequest(request);
+          }}
+        />
+      ) : null}
+
+      {editingRequest ? (
+        <EditRequestModal
+          request={editingRequest}
+          onClose={() => setEditingRequest(null)}
+          onSave={saveRequestEdits}
         />
       ) : null}
     </div>

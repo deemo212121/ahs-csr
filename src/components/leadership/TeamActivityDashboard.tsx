@@ -26,6 +26,8 @@ function todayIso() {
   return new Date().toISOString().slice(0, 10);
 }
 
+const EARLIEST_ISO = '2000-01-01';
+
 function withinRange(value: string | null | undefined, startIso: string, endIso: string) {
   if (!value) return false;
   const time = new Date(value).getTime();
@@ -184,9 +186,11 @@ export function TeamActivityDashboard({
   }, [groupByTeam, teams, rangedTickets, rangedCalls]);
 
   const isSingleDay = startDate === endDate;
-  const rangeLabel = isSingleDay
-    ? (startDate === todayIso() ? 'Today' : formatDateTime(startDate).split(',')[0])
-    : `${startDate} to ${endDate}`;
+  const rangeLabel = startDate === EARLIEST_ISO
+    ? 'All Time'
+    : isSingleDay
+      ? (startDate === todayIso() ? 'Today' : formatDateTime(startDate).split(',')[0])
+      : `${startDate} to ${endDate}`;
 
   return (
     <div className="agent-dashboard csr-dashboard-upgraded">
@@ -211,6 +215,16 @@ export function TeamActivityDashboard({
               type="button"
             >
               Today
+            </button>
+            <button
+              className="btn btn-secondary"
+              onClick={() => {
+                setStartDate(EARLIEST_ISO);
+                setEndDate(todayIso());
+              }}
+              type="button"
+            >
+              All Time
             </button>
           </div>
         </div>

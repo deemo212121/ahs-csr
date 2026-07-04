@@ -1,6 +1,6 @@
 'use client';
 
-import { CalendarDays, MessageCircle, RefreshCw, Send } from 'lucide-react';
+import { ArrowLeft, CalendarDays, MessageCircle, RefreshCw, Send } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '@/components/AuthProvider';
 import { fetchJsonWithFirebase } from '@/lib/auth/client';
@@ -97,6 +97,7 @@ export function CustomerMessagesPage() {
   const [loading, setLoading] = useState(true);
   const [threadLoading, setThreadLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [mobileShowList, setMobileShowList] = useState(true);
 
   const selectedThread = useMemo(
     () => threads.find((thread) => thread.id === selectedId) ?? threads[0] ?? null,
@@ -113,6 +114,7 @@ export function CustomerMessagesPage() {
 
       const requestId = new URLSearchParams(window.location.search).get('request');
       const requestedThread = requestId ? data.threads.find((thread) => thread.request_id === requestId || thread.er_ticket_id === requestId || thread.request_number === requestId) : null;
+      if (requestedThread) setMobileShowList(false);
       setSelectedId((current) => {
         if (requestedThread) return requestedThread.id;
         if (current && data.threads.some((thread) => thread.id === current)) return current;
@@ -183,7 +185,7 @@ export function CustomerMessagesPage() {
   return (
     <div className="customer-page-shell cx-messages-page">
       {error ? <div className="customer-alert">{error}</div> : null}
-      <section className="customer-messages-layout cx-messages-layout">
+      <section className={`customer-messages-layout cx-messages-layout ${mobileShowList ? 'cx-mobile-list' : 'cx-mobile-chat'}`}>
         <aside className="customer-message-requests cx-message-requests">
           <div className="customer-message-head">
             <div>
@@ -203,7 +205,10 @@ export function CustomerMessagesPage() {
               <button
                 className={selectedThread?.id === thread.id ? 'active' : ''}
                 key={thread.id}
-                onClick={() => setSelectedId(thread.id)}
+                onClick={() => {
+                  setSelectedId(thread.id);
+                  setMobileShowList(false);
+                }}
                 type="button"
               >
                 <span className={`cx-status-pill ${statusLabel(thread.request?.verification_status).toLowerCase()}`}>
@@ -221,6 +226,9 @@ export function CustomerMessagesPage() {
           {selectedThread ? (
             <>
               <div className="customer-chat-head">
+                <button className="customer-icon-btn cx-chat-back-btn" onClick={() => setMobileShowList(true)} type="button" aria-label="Back to conversations">
+                  <ArrowLeft size={17} />
+                </button>
                 <div>
                   <strong>{selectedThread.request_number}</strong>
                   <span>{serviceLabel(selectedThread.request)} • {selectedThread.request?.city || 'Service area pending'}</span>

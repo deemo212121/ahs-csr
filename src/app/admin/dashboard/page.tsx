@@ -9,7 +9,7 @@ import { RequireAuth } from '@/components/RequireAuth';
 export default function AdminDashboardPage() {
   return (
     <RequireAuth roles={['admin']}>
-      <AdminShell title="Admin Dashboard">
+      <AdminShell title="Status Summary">
         <AdminDashboard />
       </AdminShell>
     </RequireAuth>

@@ -519,14 +519,41 @@ function AppliancesPage() {
 function ActivityLogsPage() {
   const { activityLogs, loading, error, refresh } = useAdminCatalog('activity-logs');
   const [query, setQuery] = useState('');
+  const [ticketQuery, setTicketQuery] = useState('');
+  const [locationQuery, setLocationQuery] = useState('');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
   const [actionFilter, setActionFilter] = useState('all');
   const [selectedLog, setSelectedLog] = useState<ActivityLogRow | null>(null);
   const actionOptions = useMemo(() => ['all', ...Array.from(new Set(activityLogs.map((log) => log.action)))], [activityLogs]);
   const filtered = useMemo(() => {
     const needle = query.trim().toLowerCase();
+    const ticketNeedle = ticketQuery.trim().toLowerCase();
+    const locationNeedle = locationQuery.trim().toLowerCase();
+    const fromTime = dateFrom ? new Date(dateFrom).getTime() : null;
+    const toTime = dateTo ? new Date(`${dateTo}T23:59:59.999`).getTime() : null;
+
     return activityLogs.filter((log) => {
       const matchesAction = actionFilter === 'all' || log.action === actionFilter;
       if (!matchesAction) return false;
+
+      if (ticketNeedle) {
+        const ticketHaystack = [log.ticket_no, log.ticket_id, log.legacy_request_id ? `#${log.legacy_request_id}` : '']
+          .filter(Boolean)
+          .join(' ')
+          .toLowerCase();
+        if (!ticketHaystack.includes(ticketNeedle)) return false;
+      }
+
+      if (locationNeedle) {
+        const locationHaystack = (log.ticket_location || '').toLowerCase();
+        if (!locationHaystack.includes(locationNeedle)) return false;
+      }
+
+      const createdTime = new Date(log.created_at).getTime();
+      if (fromTime !== null && !Number.isNaN(createdTime) && createdTime < fromTime) return false;
+      if (toTime !== null && !Number.isNaN(createdTime) && createdTime > toTime) return false;
+
       if (!needle) return true;
       return [
         log.actor_name,
@@ -555,7 +582,7 @@ function ActivityLogsPage() {
         .toLowerCase()
         .includes(needle);
     });
-  }, [activityLogs, actionFilter, query]);
+  }, [activityLogs, actionFilter, query, ticketQuery, locationQuery, dateFrom, dateTo]);
   const today = activityLogs.filter((log) => new Date(log.created_at).toDateString() === new Date().toDateString()).length;
   const statusChanges = activityLogs.filter((log) => log.action === 'status_change').length;
   const ticketsTouched = new Set(activityLogs.map((log) => log.ticket_id || log.ticket_no || log.legacy_request_id).filter(Boolean)).size;
@@ -584,15 +611,49 @@ function ActivityLogsPage() {
       <section className="admin-activity-filter">
         <input
           onChange={(event) => setQuery(event.target.value)}
-          placeholder="Search ticket, person, team, action, or changed value..."
+          placeholder="Search name, person, team, action, or changed value..."
           value={query}
+        />
+        <input
+          onChange={(event) => setTicketQuery(event.target.value)}
+          placeholder="Ticket #"
+          value={ticketQuery}
+        />
+        <input
+          onChange={(event) => setLocationQuery(event.target.value)}
+          placeholder="Location"
+          value={locationQuery}
+        />
+        <input
+          aria-label="From date"
+          onChange={(event) => setDateFrom(event.target.value)}
+          type="date"
+          value={dateFrom}
+        />
+        <input
+          aria-label="To date"
+          onChange={(event) => setDateTo(event.target.value)}
+          type="date"
+          value={dateTo}
         />
         <select onChange={(event) => setActionFilter(event.target.value)} value={actionFilter}>
           {actionOptions.map((action) => (
             <option key={action} value={action}>{action === 'all' ? 'All actions' : action.replaceAll('_', ' ')}</option>
           ))}
         </select>
-        <button onClick={() => { setQuery(''); setActionFilter('all'); }} type="button">Clear</button>
+        <button
+          onClick={() => {
+            setQuery('');
+            setTicketQuery('');
+            setLocationQuery('');
+            setDateFrom('');
+            setDateTo('');
+            setActionFilter('all');
+          }}
+          type="button"
+        >
+          Clear
+        </button>
       </section>
 
       {loading ? <div className="admin-empty-state">Loading activity logs...</div> : null}

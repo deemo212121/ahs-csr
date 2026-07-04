@@ -65,7 +65,11 @@ export function WebRtcCallRoom({ call, participantRole, onCallEnded }: WebRtcCal
   const recordingChunksRef = useRef<Blob[]>([]);
   const recordingContextRef = useRef<AudioContext | null>(null);
   const recordingNodesRef = useRef<MediaStreamAudioSourceNode[]>([]);
-  const [status, setStatus] = useState('Preparing secure audio room...');
+  // If the call was already accepted before this component mounted (e.g. this
+  // side just refreshed mid-call), say "Reconnecting" instead of "Preparing" —
+  // this is a resume, not a fresh join, and the other side's grace window is
+  // already forgiving it for a few seconds.
+  const [status, setStatus] = useState(call.accepted_at ? 'Reconnecting to the call...' : 'Preparing secure audio room...');
   const [connectionState, setConnectionState] = useState<RTCPeerConnectionState>('new');
   const [muted, setMuted] = useState(false);
   const [roomError, setRoomError] = useState<string | null>(null);
@@ -419,7 +423,19 @@ export function WebRtcCallRoom({ call, participantRole, onCallEnded }: WebRtcCal
       }
       if (restartInFlightRef.current) return;
       if (Date.now() - lastRestartAtRef.current < RESTART_RETRY_MS) return;
-      if (peer.signalingState !== 'stable') return;
+      if (peer.signalingState !== 'stable') {
+        // The peer is mid-negotiation (e.g. a stale replayed offer/answer is
+        // still being processed) — it should settle to "stable" shortly.
+        // Retrying instead of giving up here was the gap that made some
+        // reconnects silently never happen: this restart attempt would just
+        // be dropped with nothing else scheduled to try again until the next
+        // connectionstatechange event, which may not fire again on its own.
+        log(`restartIce deferred — signalingState is "${peer.signalingState}", retrying shortly`);
+        window.setTimeout(() => {
+          if (!cancelled) void restartConnection();
+        }, 2000);
+        return;
+      }
 
       log('restartIce triggered (connectionState was failed)');
       restartInFlightRef.current = true;
@@ -498,7 +514,17 @@ export function WebRtcCallRoom({ call, participantRole, onCallEnded }: WebRtcCal
       if (peer.signalingState === 'closed') return;
 
       if (signal.signal_type === 'ready' && participantRole === 'customer') {
-        await sendOffer();
+        // A "ready" signal normally only arrives once, right when staff joins.
+        // But if staff refreshes mid-call, their fresh room re-sends "ready" —
+        // and since this customer side already sent its initial offer,
+        // sendOffer() would silently no-op (offerSentRef is already true),
+        // leaving the call stuck instead of recovering. Treat a repeat
+        // "ready" as a reconnect cue and nudge a fresh ICE-restart offer.
+        if (offerSentRef.current) {
+          await restartConnection();
+        } else {
+          await sendOffer();
+        }
       }
 
       if (signal.signal_type === 'offer') {
@@ -577,8 +603,27 @@ export function WebRtcCallRoom({ call, participantRole, onCallEnded }: WebRtcCal
 
     void start();
 
+    // Background tabs get their setInterval timers throttled by the browser
+    // (often to once a minute or less) — that's what made switching tabs look
+    // like a disconnect: signal polling and heartbeats basically stopped,
+    // even though the underlying audio/peer connection was usually still
+    // alive. Catch up immediately the moment the tab is foregrounded again,
+    // instead of waiting for the next throttled tick.
+    function handleVisibilityChange() {
+      if (document.visibilityState !== 'visible' || cancelled) return;
+      log('tab became visible again — resyncing signals/heartbeat immediately');
+      void pollSignals();
+      void patchCall('heartbeat');
+      const peer = pcRef.current;
+      if (peer && (peer.connectionState === 'disconnected' || peer.connectionState === 'failed')) {
+        void restartConnection();
+      }
+    }
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
     return () => {
       cancelled = true;
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
       if (signalTimer) window.clearInterval(signalTimer);
       if (heartbeatTimer) window.clearInterval(heartbeatTimer);
       clearRecoveryTimer();

@@ -37,7 +37,6 @@ export function CustomerRequestsPage() {
     return {
       total: requests.length,
       newRequests: requests.filter((request) => visibleStatus(request) === 'new').length,
-      inProgress: requests.filter((request) => visibleStatus(request) === 'in-progress').length,
     };
   }, [requests]);
 
@@ -71,7 +70,6 @@ export function CustomerRequestsPage() {
       <section className="cx-my-request-stats">
         <div><strong>{stats.total}</strong><span>Total</span></div>
         <div><strong>{stats.newRequests}</strong><span>New Request</span></div>
-        <div><strong>{stats.inProgress}</strong><span>In Progress</span></div>
       </section>
 
       <section className="customer-filter-panel cx-request-filter-panel">

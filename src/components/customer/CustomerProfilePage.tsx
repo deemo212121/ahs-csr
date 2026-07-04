@@ -3,6 +3,7 @@
 import { Save, UserRound } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useAuth } from '@/components/AuthProvider';
+import { fetchJsonWithFirebase } from '@/lib/auth/client';
 import { US_STATES } from '@/lib/data/usStates';
 
 type ServiceAreaOption = {
@@ -25,15 +26,50 @@ function memberSince(value?: string | null) {
 }
 
 export function CustomerProfilePage() {
-  const { profile } = useAuth();
+  const { user, profile, refreshProfile } = useAuth();
   const fullName = [profile?.first_name, profile?.last_name].filter(Boolean).join(' ') || 'Customer';
 
+  const [firstName, setFirstName] = useState(profile?.first_name || '');
+  const [lastName, setLastName] = useState(profile?.last_name || '');
+  const [phoneNumber, setPhoneNumber] = useState(profile?.phone_number || '');
+  const [address, setAddress] = useState(profile?.address || '');
   const [city, setCity] = useState(profile?.city || '');
   const [state, setState] = useState(profile?.state || '');
   const [region, setRegion] = useState(profile?.region || '');
   const [zipCode, setZipCode] = useState(profile?.zip_code || '');
   const [zipMatches, setZipMatches] = useState<ServiceAreaOption[]>([]);
   const [zipMessage, setZipMessage] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [showSavedToast, setShowSavedToast] = useState(false);
+
+  async function saveProfile() {
+    if (!user) return;
+    setSaving(true);
+    setSaveError(null);
+    try {
+      await fetchJsonWithFirebase(user, '/api/me', {
+        method: 'PATCH',
+        body: JSON.stringify({
+          first_name: firstName,
+          last_name: lastName,
+          phone_number: phoneNumber,
+          address,
+          city,
+          state,
+          region,
+          zip_code: zipCode,
+        }),
+      });
+      await refreshProfile();
+      setShowSavedToast(true);
+      window.setTimeout(() => setShowSavedToast(false), 2500);
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : 'Unable to save profile.');
+    } finally {
+      setSaving(false);
+    }
+  }
 
   function applyServiceArea(area: ServiceAreaOption) {
     setCity(area.city);
@@ -91,11 +127,11 @@ export function CustomerProfilePage() {
         <div className="cx-profile-form">
           <label>
             <span>First Name</span>
-            <input defaultValue={profile?.first_name || ''} />
+            <input onChange={(event) => setFirstName(event.target.value)} value={firstName} />
           </label>
           <label>
             <span>Last Name</span>
-            <input defaultValue={profile?.last_name || ''} />
+            <input onChange={(event) => setLastName(event.target.value)} value={lastName} />
           </label>
           <label className="wide">
             <span>Email</span>
@@ -104,11 +140,11 @@ export function CustomerProfilePage() {
           </label>
           <label className="wide">
             <span>Phone Number</span>
-            <input defaultValue={profile?.phone_number || ''} />
+            <input onChange={(event) => setPhoneNumber(event.target.value)} value={phoneNumber} />
           </label>
           <label className="wide">
             <span>Address</span>
-            <textarea defaultValue={profile?.address || ''} />
+            <textarea onChange={(event) => setAddress(event.target.value)} value={address} />
           </label>
           <label>
             <span>City</span>
@@ -155,11 +191,14 @@ export function CustomerProfilePage() {
             <input onChange={(event) => setRegion(event.target.value)} value={region} />
           </label>
         </div>
-        <button className="btn btn-primary cx-save-profile" type="button">
+        {saveError ? <div className="customer-alert">{saveError}</div> : null}
+        <button className="btn btn-primary cx-save-profile" disabled={saving} onClick={() => void saveProfile()} type="button">
           <Save size={17} />
-          Save Profile
+          {saving ? 'Saving...' : 'Save Profile'}
         </button>
       </section>
+
+      {showSavedToast ? <div className="cx-saved-toast">Saved profile</div> : null}
     </div>
   );
 }

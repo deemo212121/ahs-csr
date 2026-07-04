@@ -734,16 +734,23 @@ async function resolveLocalCustomerIdForRequest(
   if (!requestEmail && !requestPhone) return null;
 
   const profiles = await getLocalCustomerProfiles(supabaseAdmin);
-  const match = profiles.find((profile) => {
-    const profileEmail = normalizeEmail(profile.email);
-    const profilePhone = normalizePhone(profile.phone_number);
-    return Boolean(
-      (requestEmail && profileEmail === requestEmail) ||
-      (requestPhone && profilePhone === requestPhone),
-    );
-  });
 
-  return match?.id ?? null;
+  // Email is the authoritative match — a manual CSR ticket's conversation
+  // must land on the customer account that actually owns that email, not
+  // whichever profile happens to share a phone number (multiple customers,
+  // or CSR test tickets, can legitimately share the same phone). Phone is
+  // only used as a fallback when there's no email or no email match.
+  if (requestEmail) {
+    const emailMatch = profiles.find((profile) => normalizeEmail(profile.email) === requestEmail);
+    if (emailMatch) return emailMatch.id;
+  }
+
+  if (requestPhone) {
+    const phoneMatch = profiles.find((profile) => normalizePhone(profile.phone_number) === requestPhone);
+    if (phoneMatch) return phoneMatch.id;
+  }
+
+  return null;
 }
 
 async function ensureErTicketThreads(
