@@ -10,6 +10,11 @@ type WebRtcCallRoomProps = {
   call: RtcCall;
   participantRole: 'customer' | 'staff';
   onCallEnded?: () => void;
+  // 'full' is the normal in-page room UI. 'floating' renders a compact bar
+  // (duration, mute, end call) for when the user has navigated away from the
+  // calls page — the same underlying RTCPeerConnection keeps running either
+  // way, only the chrome around it changes.
+  variant?: 'full' | 'floating';
 };
 
 type SignalResponse = { signals: RtcSignal[] };
@@ -43,7 +48,7 @@ function signalBaseline(call: RtcCall) {
   return new Date(time - 30000).toISOString();
 }
 
-export function WebRtcCallRoom({ call, participantRole, onCallEnded }: WebRtcCallRoomProps) {
+export function WebRtcCallRoom({ call, participantRole, onCallEnded, variant = 'full' }: WebRtcCallRoomProps) {
   const { user } = useAuth();
   const onCallEndedRef = useRef(onCallEnded);
   useEffect(() => {
@@ -645,14 +650,40 @@ export function WebRtcCallRoom({ call, participantRole, onCallEnded }: WebRtcCal
     setMuted(nextMuted);
   }
 
+  // The <audio> element must stay mounted across variant switches (and even
+  // in the "waiting" state) — it's what remoteAudioRef points at, and losing
+  // it would silently kill playback the moment the UI changes around it.
+  const remoteAudioEl = <audio ref={remoteAudioRef} autoPlay playsInline />;
+
   if (!canJoin) {
+    if (variant === 'floating') return remoteAudioEl;
     return (
       <div className="webrtc-room-card waiting">
+        {remoteAudioEl}
         <div className="webrtc-orb"><Radio size={24} /></div>
         <div>
           <h3>Waiting for an available staff member</h3>
           <p>{roomSubtitle}</p>
         </div>
+      </div>
+    );
+  }
+
+  if (variant === 'floating') {
+    return (
+      <div className="webrtc-floating-bar">
+        {remoteAudioEl}
+        <div className={`webrtc-floating-dot ${connectionState}`} />
+        <div className="webrtc-floating-copy">
+          <strong>{participantRole === 'customer' ? 'Support call' : call.customer_name || 'Live call'}</strong>
+          <small>{formatDuration(elapsed)} • {connectionState === 'connected' ? 'Connected' : status}</small>
+        </div>
+        <button className={`webrtc-floating-btn ${muted ? 'muted' : ''}`} onClick={toggleMute} type="button" aria-label={muted ? 'Unmute' : 'Mute'}>
+          {muted ? <MicOff size={15} /> : <Mic size={15} />}
+        </button>
+        <button className="webrtc-floating-btn danger" onClick={() => void endCall()} type="button" aria-label="End call">
+          <PhoneOff size={15} />
+        </button>
       </div>
     );
   }
@@ -686,7 +717,7 @@ export function WebRtcCallRoom({ call, participantRole, onCallEnded }: WebRtcCal
 
       {roomError ? <div className="call-room-alert">{roomError}</div> : null}
 
-      <audio ref={remoteAudioRef} autoPlay playsInline />
+      {remoteAudioEl}
 
       <div className="webrtc-controls">
         <button className={`webrtc-control ${muted ? 'muted' : ''}`} onClick={toggleMute} type="button">

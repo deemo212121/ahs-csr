@@ -736,20 +736,30 @@ export function PortalShell({
             className="customer-bottom-nav"
             aria-label="Customer bottom navigation"
           >
-            {nav.map((item) => (
-              <Link
-                className={
-                  pathname === item.href || pathname.startsWith(`${item.href}/`)
-                    ? "active"
-                    : ""
-                }
-                href={item.href}
-                key={item.href}
-              >
-                {item.icon}
-                <span>{item.label}</span>
-              </Link>
-            ))}
+            {nav.map((item) => {
+              const badge = badgeFor(item.href);
+              const pulse = pulseFor(item.href);
+              return (
+                <Link
+                  className={
+                    pathname === item.href || pathname.startsWith(`${item.href}/`)
+                      ? "active"
+                      : ""
+                  }
+                  href={item.href}
+                  key={item.href}
+                  onClick={() => markReadFor(item.href)}
+                >
+                  {item.icon}
+                  <span>{item.label}</span>
+                  {badge > 0 ? (
+                    <span className={`nav-badge${pulse ? " nav-badge--pulse" : ""}`}>
+                      {badge > 9 ? "9+" : badge}
+                    </span>
+                  ) : null}
+                </Link>
+              );
+            })}
           </nav>
         ) : null}
       </main>

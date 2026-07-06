@@ -1,6 +1,6 @@
 'use client';
 
-import { ArrowLeft, CalendarDays, MessageCircle, RefreshCw, Send } from 'lucide-react';
+import { ArrowLeft, CalendarDays, Mail, MailOpen, MessageCircle, RefreshCw, Send } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '@/components/AuthProvider';
 import { fetchJsonWithFirebase } from '@/lib/auth/client';
@@ -52,6 +52,8 @@ type TicketThread = {
   created_at: string;
   request: ThreadRequest | null;
   latest_message: ThreadMessage | null;
+  unread?: boolean;
+  unread_count?: number;
 };
 
 // Locking is a manual CSR action (Mark Complete / Unmark Complete) — the ER
@@ -102,6 +104,11 @@ export function CustomerMessagesPage() {
   const selectedThread = useMemo(
     () => threads.find((thread) => thread.id === selectedId) ?? threads[0] ?? null,
     [threads, selectedId],
+  );
+
+  const unreadCount = useMemo(
+    () => threads.reduce((sum, thread) => sum + (thread.unread ? thread.unread_count ?? 1 : 0), 0),
+    [threads],
   );
 
   async function loadThreads(silent = false) {
@@ -158,6 +165,22 @@ export function CustomerMessagesPage() {
     }
   }
 
+  async function toggleThreadRead(thread: TicketThread) {
+    if (!user) return;
+    const nextUnread = !thread.unread;
+    // Optimistic — flip it locally right away, reconcile on the next poll.
+    setThreads((current) => current.map((item) => (item.id === thread.id ? { ...item, unread: nextUnread } : item)));
+    try {
+      await fetchJsonWithFirebase(user, `/api/messages/threads/${thread.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ action: nextUnread ? 'mark_unread' : 'mark_read' }),
+      });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unable to update read status.');
+      await loadThreads(true);
+    }
+  }
+
   useEffect(() => {
     loadThreads();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -189,7 +212,10 @@ export function CustomerMessagesPage() {
         <aside className="customer-message-requests cx-message-requests">
           <div className="customer-message-head">
             <div>
-              <strong>Approved Ticket Chats</strong>
+              <strong>
+                Approved Ticket Chats
+                {unreadCount > 0 ? <span className="cx-unread-badge">{unreadCount > 9 ? '9+' : unreadCount}</span> : null}
+              </strong>
               <span>Chat with support about an approved ticket.</span>
             </div>
             <button className="customer-icon-btn" onClick={() => void loadThreads()} type="button"><RefreshCw size={15} /></button>
@@ -203,7 +229,7 @@ export function CustomerMessagesPage() {
             ) : null}
             {threads.map((thread) => (
               <button
-                className={selectedThread?.id === thread.id ? 'active' : ''}
+                className={`${selectedThread?.id === thread.id ? 'active' : ''} ${thread.unread ? 'cx-thread-unread' : ''}`}
                 key={thread.id}
                 onClick={() => {
                   setSelectedId(thread.id);
@@ -211,8 +237,28 @@ export function CustomerMessagesPage() {
                 }}
                 type="button"
               >
-                <span className={`cx-status-pill ${statusLabel(thread.request?.verification_status).toLowerCase()}`}>
-                  {statusLabel(thread.request?.verification_status)}
+                <span className="cx-thread-row-top">
+                  <span className={`cx-status-pill ${statusLabel(thread.request?.verification_status).toLowerCase()}`}>
+                    {statusLabel(thread.request?.verification_status)}
+                  </span>
+                  <span className="cx-thread-row-actions">
+                    {thread.unread && thread.unread_count ? (
+                      <span className="cx-unread-count">{thread.unread_count > 9 ? '9+' : thread.unread_count}</span>
+                    ) : null}
+                    <span
+                      className="cx-thread-read-toggle"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        void toggleThreadRead(thread);
+                      }}
+                      role="button"
+                      tabIndex={0}
+                      aria-label={thread.unread ? 'Mark as read' : 'Mark as unread'}
+                      title={thread.unread ? 'Mark as read' : 'Mark as unread'}
+                    >
+                      {thread.unread ? <Mail size={15} /> : <MailOpen size={15} />}
+                    </span>
+                  </span>
                 </span>
                 <strong>#{thread.request_number}</strong>
                 <span>{serviceLabel(thread.request)}</span>

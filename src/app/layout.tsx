@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { AuthProvider } from '@/components/AuthProvider';
+import { CallSessionProvider } from '@/components/calls/CallSessionProvider';
 import { NotificationsProvider } from '@/components/NotificationsProvider';
 import { ThemeProvider } from '@/components/ThemeProvider';
 import '@/styles/globals.css';
@@ -33,7 +34,9 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
       <body suppressHydrationWarning>
         <ThemeProvider>
           <AuthProvider>
-            <NotificationsProvider>{children}</NotificationsProvider>
+            <CallSessionProvider>
+              <NotificationsProvider>{children}</NotificationsProvider>
+            </CallSessionProvider>
           </AuthProvider>
         </ThemeProvider>
       </body>

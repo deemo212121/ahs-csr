@@ -26,12 +26,12 @@ function setLastSeen(category: NotificationCategory, at: number) {
   window.localStorage.setItem(lastSeenKey(category), String(at));
 }
 
-export type FeedItem = { id: string; at: string; label: string; region?: string | null };
+export type FeedItem = { id: string; at: string; label: string; region?: string | null; unread?: boolean; unreadCount?: number };
 
 type FetchResult = { items: FeedItem[]; latestAt: number };
 
 type RawRequest = { id: string; requested_at?: string; created_at?: string; full_name?: string; region?: string | null; city?: string | null };
-type RawThread = { id: string; last_message_at: string | null; customer_name: string | null; subject: string };
+type RawThread = { id: string; last_message_at: string | null; customer_name: string | null; subject: string; unread?: boolean; unread_count?: number };
 type RawCall = { id: string; status: string; queued_at: string; customer_name: string };
 
 function latestTimestamp(items: FeedItem[]) {
@@ -61,7 +61,13 @@ async function fetchMessages(user: AuthTokenUser): Promise<FetchResult> {
     const data = await fetchJsonWithFirebase<{ threads?: RawThread[] }>(user, '/api/messages/threads?limit=150');
     const items: FeedItem[] = (data.threads ?? [])
       .filter((t) => Boolean(t.last_message_at))
-      .map((t) => ({ id: String(t.id), at: t.last_message_at as string, label: t.customer_name || t.subject }));
+      .map((t) => ({
+        id: String(t.id),
+        at: t.last_message_at as string,
+        label: t.customer_name || t.subject,
+        unread: t.unread,
+        unreadCount: t.unread_count,
+      }));
     return { items, latestAt: latestTimestamp(items) };
   } catch {
     return { items: [], latestAt: 0 };
@@ -241,8 +247,16 @@ export function useNotificationFeed(
 
   // Open calls represent work nobody has handled yet - they stay counted
   // until accepted/missed, not just until someone glances at the page.
+  // Messages have real per-conversation read state from the server now (see
+  // `unread` on each thread) - use that instead of the coarse "seen the nav
+  // item once" localStorage cutoff, so the badge only clears once each
+  // conversation is actually opened, on any device.
   const count =
-    category === 'calls' ? items.length : items.filter((item) => (new Date(item.at).getTime() || 0) > lastSeen).length;
+    category === 'calls'
+      ? items.length
+      : category === 'messages'
+        ? items.reduce((sum, item) => sum + (item.unread ? item.unreadCount ?? 1 : 0), 0)
+        : items.filter((item) => (new Date(item.at).getTime() || 0) > lastSeen).length;
 
   return { count, items, justArrived, markRead };
 }

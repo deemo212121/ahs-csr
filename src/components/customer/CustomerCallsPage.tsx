@@ -5,7 +5,7 @@ import { BellRing, Headphones, PhoneCall, PhoneOff, RefreshCw, ShieldCheck } fro
 import { useAuth } from '@/components/AuthProvider';
 import { fetchJsonWithFirebase } from '@/lib/auth/client';
 import type { RtcCall, RtcCallListResponse } from '@/lib/calls/types';
-import { WebRtcCallRoom } from '@/components/calls/WebRtcCallRoom';
+import { useCallSession } from '@/components/calls/CallSessionProvider';
 
 function timeLabel(value?: string | null) {
   if (!value) return '—';
@@ -23,6 +23,7 @@ function statusCopy(call?: RtcCall | null) {
 
 export function CustomerCallsPage() {
   const { user, profile } = useAuth();
+  const { startSession, registerAnchor } = useCallSession();
   const [calls, setCalls] = useState<RtcCall[]>([]);
   const [loading, setLoading] = useState(true);
   const [requesting, setRequesting] = useState(false);
@@ -60,6 +61,15 @@ export function CustomerCallsPage() {
   const handleCallEnded = useCallback(() => {
     void loadCalls(true);
   }, [loadCalls]);
+
+  // Registering the call with the global session keeps the RTCPeerConnection
+  // alive even if the customer navigates to another tab in the bottom nav —
+  // it portals into the anchor below while this page is visible, and falls
+  // back to a floating bar elsewhere instead of hanging up.
+  useEffect(() => {
+    if (!activeCall) return;
+    startSession(activeCall, 'customer', handleCallEnded);
+  }, [activeCall, handleCallEnded, startSession]);
 
   async function requestCall() {
     if (!user) return;
@@ -145,7 +155,7 @@ export function CustomerCallsPage() {
         </section>
 
         {activeCall ? (
-          <WebRtcCallRoom call={activeCall} participantRole="customer" onCallEnded={handleCallEnded} />
+          <div className="webrtc-anchor" ref={registerAnchor} />
         ) : (
           <section className="customer-call-waiting-card">
             <ShieldCheck size={30} />

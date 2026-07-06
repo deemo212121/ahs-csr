@@ -1,6 +1,6 @@
 'use client';
 
-import { CalendarDays, CheckCircle2, ClipboardList, MessageSquare, Pencil, RotateCcw, Send, Trash2 } from 'lucide-react';
+import { CalendarDays, CheckCircle2, ClipboardList, Mail, MailOpen, MessageSquare, Pencil, RotateCcw, Send, Trash2 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '@/components/AuthProvider';
 import { fetchJsonWithFirebase } from '@/lib/auth/client';
@@ -56,6 +56,8 @@ type TicketThread = {
   updated_at: string;
   request: ThreadRequest | null;
   latest_message: ThreadMessage | null;
+  unread?: boolean;
+  unread_count?: number;
 };
 
 // Locking is a manual CSR action (see the "Mark Complete" button) — the ER
@@ -173,6 +175,11 @@ export function InternalMessagesPage({
     [activeId, threads],
   );
 
+  const unreadCount = useMemo(
+    () => threads.reduce((sum, thread) => sum + (thread.unread ? thread.unread_count ?? 1 : 0), 0),
+    [threads],
+  );
+
   const branchOptions = useMemo(() => [...BRANCHES], []);
   const { selectedBranches, setSelectedBranches } = useBranchFilter();
 
@@ -283,6 +290,21 @@ export function InternalMessagesPage({
     }
   }
 
+  async function toggleThreadRead(thread: TicketThread) {
+    if (!user) return;
+    const nextUnread = !thread.unread;
+    setThreads((current) => current.map((item) => (item.id === thread.id ? { ...item, unread: nextUnread } : item)));
+    try {
+      await fetchJsonWithFirebase(user, `/api/messages/threads/${thread.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ action: nextUnread ? 'mark_unread' : 'mark_read' }),
+      });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unable to update read status.');
+      await loadThreads(true);
+    }
+  }
+
   useEffect(() => {
     loadThreads();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -323,6 +345,7 @@ export function InternalMessagesPage({
           <h2>
             <MessageSquare size={16} />
             Ticket Conversations
+            {unreadCount > 0 ? <span className="cx-unread-badge">{unreadCount > 9 ? '9+' : unreadCount}</span> : null}
           </h2>
           <input
             className="ticket-message-search"
@@ -338,12 +361,32 @@ export function InternalMessagesPage({
             ) : null}
             {filteredThreads.map((thread) => (
               <button
-                className={thread.id === activeThread?.id ? 'active' : ''}
+                className={`${thread.id === activeThread?.id ? 'active' : ''} ${thread.unread ? 'cx-thread-unread' : ''}`}
                 key={thread.id}
                 onClick={() => setActiveId(thread.id)}
                 type="button"
               >
-                <strong>{thread.request_number}</strong>
+                <span className="cx-thread-row-top">
+                  <strong>{thread.request_number}</strong>
+                  <span className="cx-thread-row-actions">
+                    {thread.unread && thread.unread_count ? (
+                      <span className="cx-unread-count">{thread.unread_count > 9 ? '9+' : thread.unread_count}</span>
+                    ) : null}
+                    <span
+                      className="cx-thread-read-toggle"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        void toggleThreadRead(thread);
+                      }}
+                      role="button"
+                      tabIndex={0}
+                      aria-label={thread.unread ? 'Mark as read' : 'Mark as unread'}
+                      title={thread.unread ? 'Mark as read' : 'Mark as unread'}
+                    >
+                      {thread.unread ? <Mail size={14} /> : <MailOpen size={14} />}
+                    </span>
+                  </span>
+                </span>
                 <span>{thread.request?.full_name || 'Customer'} • {productLabel(thread.request)}</span>
                 <small>{shortPreview(thread.latest_message)}</small>
                 <small><CalendarDays size={12} /> {formatDate(thread.last_message_at || thread.created_at)}</small>

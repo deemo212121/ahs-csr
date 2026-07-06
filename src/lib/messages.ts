@@ -60,6 +60,8 @@ type TicketMessageThread = {
   last_message_at: string | null;
   created_at: string;
   updated_at: string;
+  customer_last_read_at: string | null;
+  staff_last_read_at: string | null;
 };
 
 type TicketMessage = {
@@ -131,6 +133,8 @@ const threadSelect = [
   'last_message_at',
   'created_at',
   'updated_at',
+  'customer_last_read_at',
+  'staff_last_read_at',
 ].join(', ');
 const messageSelect = 'id, thread_id, request_id, sender_profile_id, sender_role, sender_name, message_body, message_type, is_internal, created_at';
 
@@ -1161,6 +1165,47 @@ async function backfillErPortalRequestThreads(
   }
 }
 
+// Staff share one read state across every staff role (csr/team_leader/csr_manager/admin)
+// since they share the same conversation — only the customer side is distinct.
+function readColumnForRole(role: AuthContext['role']) {
+  return role === 'customer' ? 'customer_last_read_at' : 'staff_last_read_at';
+}
+
+function isThreadUnread(thread: TicketMessageThread, role: AuthContext['role']) {
+  if (!thread.last_message_at) return false;
+  const lastReadAt = role === 'customer' ? thread.customer_last_read_at : thread.staff_last_read_at;
+  if (!lastReadAt) return true;
+  return new Date(thread.last_message_at).getTime() > new Date(lastReadAt).getTime();
+}
+
+export async function markThreadReadState(
+  supabaseAdmin: SupabaseClient,
+  auth: AuthContext,
+  threadId: string,
+  read: boolean,
+) {
+  const thread = await getThreadForAccess(supabaseAdmin, auth, threadId);
+  const column = readColumnForRole(auth.role);
+
+  // Marking unread flags just the latest message, not the whole history —
+  // set the cutoff to just before the last message instead of clearing it
+  // entirely, so the unread count reads "1" (like a mail client), not the
+  // thread's entire message count.
+  const value = read
+    ? new Date().toISOString()
+    : thread.last_message_at
+      ? new Date(new Date(thread.last_message_at).getTime() - 1).toISOString()
+      : null;
+
+  const { error } = await supabaseAdmin
+    .from('ticket_message_threads')
+    .update({ [column]: value })
+    .eq('id', thread.id);
+
+  if (error) throw new Error(error.message);
+  return { ...thread, [column]: value } as TicketMessageThread;
+}
+
 export async function listTicketMessageThreads(
   supabaseAdmin: SupabaseClient,
   auth: AuthContext,
@@ -1231,11 +1276,38 @@ export async function listTicketMessageThreads(
     }
   }
 
-  return threads.map((thread) => ({
-    ...thread,
-    request: thread.request_id ? requestsById.get(thread.request_id) ?? threadRequestFromThread(thread) : threadRequestFromThread(thread),
-    latest_message: latestByThread.get(thread.id) ?? null,
-  }));
+  // Exact unread message counts (not just an unread/read boolean) — only
+  // queried for threads already flagged unread, since that's normally a
+  // small subset and each one needs its own cutoff (this viewer's own
+  // last-read time for that specific thread).
+  const readColumn = readColumnForRole(auth.role);
+  const unreadThreadIds = threads.filter((thread) => isThreadUnread(thread, auth.role)).map((thread) => thread.id);
+  const unreadCountByThread = new Map<string, number>();
+  if (unreadThreadIds.length) {
+    const { data: unreadMessages, error: unreadError } = await supabaseAdmin
+      .from('ticket_messages')
+      .select('thread_id, created_at')
+      .in('thread_id', unreadThreadIds);
+
+    if (unreadError) throw new Error(unreadError.message);
+    const lastReadByThread = new Map(threads.map((thread) => [thread.id, thread[readColumn]]));
+    for (const row of (unreadMessages ?? []) as Array<{ thread_id: string; created_at: string }>) {
+      const lastReadAt = lastReadByThread.get(row.thread_id);
+      if (lastReadAt && new Date(row.created_at).getTime() <= new Date(lastReadAt).getTime()) continue;
+      unreadCountByThread.set(row.thread_id, (unreadCountByThread.get(row.thread_id) ?? 0) + 1);
+    }
+  }
+
+  return threads.map((thread) => {
+    const unread = isThreadUnread(thread, auth.role);
+    return {
+      ...thread,
+      request: thread.request_id ? requestsById.get(thread.request_id) ?? threadRequestFromThread(thread) : threadRequestFromThread(thread),
+      latest_message: latestByThread.get(thread.id) ?? null,
+      unread,
+      unread_count: unread ? unreadCountByThread.get(thread.id) ?? 1 : 0,
+    };
+  });
 }
 
 export async function getThreadMessages(
@@ -1263,9 +1335,23 @@ export async function getThreadMessages(
   if (requestError) throw new Error(requestError.message);
   if (messagesError) throw new Error(messagesError.message);
 
+  // Viewing a thread's messages is what "reading" it means — touch this
+  // viewer's own read column so it drops off their unread count. This is
+  // best-effort: a failure here shouldn't block showing the messages.
+  const readColumn = readColumnForRole(auth.role);
+  const nowIso = new Date().toISOString();
+  await supabaseAdmin
+    .from('ticket_message_threads')
+    .update({ [readColumn]: nowIso })
+    .eq('id', thread.id)
+    .then(({ error: readError }) => {
+      if (readError) console.error('getThreadMessages: failed to update read state:', readError.message);
+    });
+
   return {
     thread: {
       ...thread,
+      [readColumn]: nowIso,
       request: request ?? threadRequestFromThread(thread),
     },
     messages: (messages ?? []) as TicketMessage[],
@@ -1310,9 +1396,12 @@ export async function createTicketMessage(
 
   if (error) throw new Error(error.message);
 
+  // The sender has, by definition, "read" up through their own message —
+  // touch their own read column too so sending doesn't leave the thread
+  // showing as unread for themselves.
   await supabaseAdmin
     .from('ticket_message_threads')
-    .update({ last_message_at: now, updated_at: now })
+    .update({ last_message_at: now, updated_at: now, [readColumnForRole(auth.role)]: now })
     .eq('id', thread.id);
 
   return message as TicketMessage;

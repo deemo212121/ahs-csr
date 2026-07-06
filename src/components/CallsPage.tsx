@@ -22,7 +22,7 @@ import {
 import { useAuth } from '@/components/AuthProvider';
 import { fetchJsonWithFirebase } from '@/lib/auth/client';
 import type { RtcCall, RtcCallListResponse, RtcCallStatus } from '@/lib/calls/types';
-import { WebRtcCallRoom } from '@/components/calls/WebRtcCallRoom';
+import { useCallSession } from '@/components/calls/CallSessionProvider';
 import { useLiveUpdate } from '@/lib/notifications/useLiveUpdate';
 import { BRANCHES } from '@/lib/branches';
 import { BranchCheckboxDropdown } from '@/components/BranchCheckboxDropdown';
@@ -505,6 +505,7 @@ function CallDetailsModal({
 
 export function CallsPage() {
   const { user, role } = useAuth();
+  const { startSession, registerAnchor } = useCallSession();
   const [calls, setCalls] = useState<RtcCall[]>([]);
   const [historyCalls, setHistoryCalls] = useState<RtcCall[]>([]);
   const [status, setStatus] = useState<'open' | RtcCallStatus | 'history'>('open');
@@ -653,6 +654,16 @@ export function CallsPage() {
     void loadCallHistory(true);
   }, [loadCallHistory, loadCalls]);
 
+  // Registering with the global session keeps the RTCPeerConnection alive
+  // even if this CSR clicks "Close" or navigates to another nav item —
+  // "Close" here only hides the inline room (the anchor unmounts), it no
+  // longer hangs up the call. Only the room's own "End Call" button, or the
+  // customer hanging up, actually ends the session.
+  useEffect(() => {
+    if (!activeCall) return;
+    startSession(activeCall, 'staff', handleCallEnded);
+  }, [activeCall, handleCallEnded, startSession]);
+
   async function acceptCall(call: RtcCall) {
     if (!user) return;
     setError(null);
@@ -774,7 +785,7 @@ export function CallsPage() {
 
         <aside className="call-room-panel">
           {activeCall ? (
-            <WebRtcCallRoom call={activeCall} participantRole="staff" onCallEnded={handleCallEnded} />
+            <div className="webrtc-anchor" ref={registerAnchor} />
           ) : (
             <div className="call-room-placeholder">
               <span><ShieldCheck size={30} /></span>

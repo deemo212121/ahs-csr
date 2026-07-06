@@ -630,6 +630,110 @@
   margin: 0;
 }
 
+.webrtc-anchor {
+  height: 100%;
+  width: 100%;
+}
+
+/*
+  The actual WebRtcCallRoom instance renders into a persistent portal root
+  (a div appended to <body> by CallSessionProvider) that's repositioned via
+  inline styles to exactly overlay this anchor's box — not into the anchor
+  itself — so the component never remounts (and never reconnects the call)
+  when navigating between pages. This just makes the room card fill that
+  overlay container edge to edge.
+*/
+[data-call-room-root] .webrtc-room-card,
+[data-call-room-root] .webrtc-room-card.waiting {
+  height: 100%;
+  width: 100%;
+}
+
+.webrtc-floating-bar {
+  align-items: center;
+  background: linear-gradient(135deg, rgba(7, 31, 68, 0.98), rgba(4, 14, 34, 0.98));
+  border: 1px solid rgba(74, 194, 255, 0.4);
+  border-radius: 999px;
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.4);
+  color: #eaf4ff;
+  display: flex;
+  gap: 10px;
+  left: calc(14px + env(safe-area-inset-left, 0px));
+  padding: 8px 10px 8px 14px;
+  position: fixed;
+  top: calc(14px + env(safe-area-inset-top, 0px));
+  z-index: 9000;
+}
+
+.webrtc-floating-dot {
+  background: #f59e0b;
+  border-radius: 999px;
+  flex: 0 0 auto;
+  height: 9px;
+  width: 9px;
+}
+
+.webrtc-floating-dot.connected {
+  background: #22c55e;
+  box-shadow: 0 0 8px rgba(34, 197, 94, 0.7);
+}
+
+.webrtc-floating-copy {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+}
+
+.webrtc-floating-copy strong {
+  color: #fff;
+  font-size: 0.8rem;
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.webrtc-floating-copy small {
+  color: #9fb4d5;
+  font-size: 0.7rem;
+}
+
+.webrtc-floating-btn {
+  align-items: center;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 999px;
+  color: #e8f4ff;
+  cursor: pointer;
+  display: flex;
+  flex: 0 0 auto;
+  height: 32px;
+  justify-content: center;
+  width: 32px;
+}
+
+.webrtc-floating-btn.muted {
+  background: rgba(251, 191, 36, 0.18);
+  color: #ffe7a3;
+}
+
+.webrtc-floating-btn.danger {
+  background: linear-gradient(135deg, #fb3b6c, #f97316);
+  border-color: transparent;
+  color: #fff;
+}
+
+@media (max-width: 720px) {
+  .webrtc-floating-bar {
+    left: calc(8px + env(safe-area-inset-left, 0px));
+    top: calc(8px + env(safe-area-inset-top, 0px));
+  }
+
+  .webrtc-floating-copy strong {
+    max-width: 110px;
+  }
+}
+
 .webrtc-state {
   align-items: center;
   background: rgba(255, 255, 255, 0.08);
@@ -2536,6 +2640,72 @@ a {
 .customer-message-list button.active {
   border-color: rgba(56, 189, 248, 0.72);
   box-shadow: inset 0 0 0 1px rgba(56, 189, 248, 0.2);
+}
+
+.customer-message-list button.cx-thread-unread,
+.leadership-thread-list button.cx-thread-unread {
+  border-color: rgba(239, 68, 68, 0.4);
+}
+
+.customer-message-list button.cx-thread-unread strong,
+.leadership-thread-list button.cx-thread-unread strong {
+  font-weight: 900;
+}
+
+.cx-thread-row-top {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+}
+
+.cx-thread-row-actions {
+  align-items: center;
+  display: inline-flex;
+  gap: 6px;
+}
+
+.cx-unread-count {
+  background: #ef4444;
+  border-radius: 999px;
+  color: #fff;
+  display: inline-flex;
+  font-size: 0.68rem;
+  font-weight: 900;
+  justify-content: center;
+  min-width: 18px;
+  padding: 1px 5px;
+}
+
+.cx-thread-read-toggle {
+  align-items: center;
+  border-radius: 8px;
+  color: var(--customer-muted);
+  cursor: pointer;
+  display: inline-flex;
+  height: 26px;
+  justify-content: center;
+  width: 26px;
+}
+
+.cx-thread-read-toggle:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.cx-thread-unread .cx-thread-read-toggle {
+  color: #f87171;
+}
+
+.cx-unread-badge {
+  background: #ef4444;
+  border-radius: 999px;
+  color: #fff;
+  display: inline-flex;
+  font-size: 0.68rem;
+  font-weight: 900;
+  margin-left: 8px;
+  min-width: 18px;
+  padding: 1px 5px;
+  justify-content: center;
 }
 
 .customer-message-list button span,
