@@ -5,6 +5,8 @@ import { getErSupabaseAdmin, isErSupabaseConfigured } from '@/lib/supabase/er-ad
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import type { RtcCall, RtcCallStatus } from '@/lib/calls/types';
 import { NOTIFY_CHANNELS, pingChannel } from '@/lib/notifications/broadcast';
+import { sendPushToProfiles } from '@/lib/push/send';
+import { mapCallRow, nullableText, text } from '@/lib/calls/mapCallRow';
 
 const openCallStatuses: RtcCallStatus[] = ['manager_queue', 'assigned', 'accepted'];
 
@@ -12,6 +14,7 @@ const callSelect = `
   id,
   request_id,
   customer_id,
+  company_id,
   customer_name,
   customer_email,
   phone_number,
@@ -70,19 +73,8 @@ type ServiceRequestHint = {
   requested_at: string;
 };
 
-type RawCallRow = Record<string, any>;
-
-function text(value: unknown) {
-  return typeof value === 'string' && value.trim() ? value.trim() : '';
-}
-
 function staffProfileKey(context: { profileSource: string; profile: { id: string } }) {
   return `${context.profileSource}:${context.profile.id}`;
-}
-
-function nullableText(value: unknown) {
-  const clean = text(value);
-  return clean || null;
 }
 
 function normalizeZip(value: unknown) {
@@ -102,49 +94,6 @@ function missingCallSchemaMessage(error: unknown) {
   return null;
 }
 
-function getRequestNumber(row: RawCallRow) {
-  const request = row.request;
-  if (!request) return null;
-  if (Array.isArray(request)) return nullableText(request[0]?.request_number);
-  return nullableText(request.request_number);
-}
-
-function mapCallRow(row: RawCallRow): RtcCall {
-  return {
-    id: String(row.id),
-    request_id: nullableText(row.request_id),
-    request_number: getRequestNumber(row),
-    customer_id: nullableText(row.customer_id),
-    customer_name: text(row.customer_name) || 'Customer',
-    customer_email: nullableText(row.customer_email),
-    phone_number: nullableText(row.phone_number),
-    notes: nullableText(row.notes),
-    call_reason: nullableText(row.call_reason),
-    branch: nullableText(row.branch),
-    city: nullableText(row.city),
-    state: nullableText(row.state),
-    zip_code: nullableText(row.zip_code),
-    status: (row.status || 'manager_queue') as RtcCallStatus,
-    queued_at: row.queued_at,
-    accepted_at: row.accepted_at ?? null,
-    call_started_at: row.call_started_at ?? null,
-    call_ended_at: row.call_ended_at ?? null,
-    call_duration_seconds: typeof row.call_duration_seconds === 'number' ? row.call_duration_seconds : null,
-    accepted_by_profile_id: nullableText(row.accepted_by_profile_id),
-    accepted_by_name: nullableText(row.accepted_by_name),
-    accepted_by_role: nullableText(row.accepted_by_role),
-    staff_joined_at: row.staff_joined_at ?? null,
-    customer_joined_at: row.customer_joined_at ?? null,
-    last_staff_seen_at: row.last_staff_seen_at ?? null,
-    last_customer_seen_at: row.last_customer_seen_at ?? null,
-    ended_by_profile_id: nullableText(row.ended_by_profile_id),
-    ended_reason: nullableText(row.ended_reason),
-    recording_path: nullableText(row.recording_path),
-    recording_mime: nullableText(row.recording_mime),
-    recording_uploaded_at: row.recording_uploaded_at ?? null,
-    created_at: row.created_at,
-  };
-}
 
 function getErCoverageCompanyId() {
   return (
@@ -261,6 +210,10 @@ export async function GET(request: NextRequest) {
       .order('queued_at', { ascending: false })
       .limit(limit);
 
+    if (context.profile.company_id) {
+      query = query.eq('company_id', context.profile.company_id);
+    }
+
     if (context.role === 'customer') {
       query = query.eq('customer_id', context.profile.id);
     } else if (status) {
@@ -270,17 +223,25 @@ export async function GET(request: NextRequest) {
     }
 
     // Call history access is scoped by role: CSR agents only see their own
-    // answered calls, team leaders see their own plus their team's (branch_access)
-    // calls, and CSR managers/admins see everything. The live open-call queue
-    // (history=false) stays shared across all staff so anyone can answer.
+    // personal history (same calls counted in their "Web calls handled"
+    // dashboard stat) — not the rest of the team's. Team leaders see their
+    // own calls plus their team's — "team" means real team membership
+    // (csr_team_assignments), not branch coverage, since a team leader's
+    // branch_access can span branches with CSRs who aren't actually on
+    // their team. CSR managers/admins see everything.
     if (history && context.role === 'csr') {
       query = query.eq('accepted_by_profile_id', staffProfileKey(context));
-    } else if (history && context.role === 'team_leader') {
-      const branches = (context.profile.branch_access ?? '')
-        .split('|')
-        .map((branch) => branch.trim())
-        .filter(Boolean);
-      if (branches.length) query = query.in('branch', branches);
+    }
+
+    if (history && context.role === 'team_leader') {
+      const { data: teamRows } = await supabaseAdmin
+        .from('csr_team_assignments')
+        .select('csr_staff_id')
+        .eq('team_leader_staff_id', context.profile.id);
+      const memberKeys = ((teamRows ?? []) as Array<{ csr_staff_id: string }>).map(
+        (row) => `er:${row.csr_staff_id}`,
+      );
+      query = query.in('accepted_by_profile_id', [staffProfileKey(context), ...memberKeys]);
     }
 
     const { data, error } = await query;
@@ -352,6 +313,7 @@ export async function POST(request: NextRequest) {
       .insert({
         request_id: requestHint?.id ?? body.request_id ?? null,
         customer_id: context.profile.id,
+        company_id: context.profile.company_id,
         customer_name: customerName,
         customer_email: context.profile.email || requestHint?.customer_email || null,
         phone_number: phoneNumber,
@@ -369,6 +331,33 @@ export async function POST(request: NextRequest) {
 
     if (error) throw new Error(error.message);
     await pingChannel(NOTIFY_CHANNELS.calls);
+
+    try {
+      const companyId = context.profile.company_id;
+      if (companyId && isErSupabaseConfigured()) {
+        const erSupabase = getErSupabaseAdmin();
+        if (erSupabase) {
+          const table = process.env.ER_PROFILES_TABLE?.trim() || 'profiles';
+          const { data: staff } = await erSupabase
+            .from(table)
+            .select('id')
+            .eq('company_id', companyId)
+            .eq('is_active', true)
+            .limit(200);
+          const staffProfiles = ((staff ?? []) as Array<{ id: string }>).map((row) => ({ id: row.id, source: 'er' as const }));
+          if (staffProfiles.length) {
+            await sendPushToProfiles(supabaseAdmin, staffProfiles, {
+              title: 'Incoming call',
+              body: `${customerName} is requesting a call.`,
+              url: '/csr/calls',
+            });
+          }
+        }
+      }
+    } catch {
+      // Best-effort — never block the call request over a failed push.
+    }
+
     return NextResponse.json({ call: mapCallRow(data), reused: false }, { status: 201 });
   } catch (error) {
     const setupMessage = missingCallSchemaMessage(error);

@@ -1,15 +1,10 @@
 'use client';
 
-import { useCallback, useMemo } from 'react';
+import { useCallback } from 'react';
 import { useAuth } from '@/components/AuthProvider';
-import { BRANCHES } from '@/lib/branches';
+import { useBranches } from '@/lib/useBranches';
 
 const EMPTY_SELECTION: string[] = [];
-const ALL_BRANCHES: string[] = [...BRANCHES];
-
-function normalize(next: string[]) {
-  return (next.length === 0 || next.length === BRANCHES.length) ? EMPTY_SELECTION : next;
-}
 
 // Single shared branch/region filter for the logged-in user, saved to their
 // profile (via /api/me/preferences) so it's the same on every device/page —
@@ -24,13 +19,18 @@ function normalize(next: string[]) {
 // `?? []` / `[...x]` inline — those allocate a new array every render.
 export function useBranchFilter() {
   const { profile, updateFilterRegions } = useAuth();
+  const { branches: allBranches } = useBranches();
 
   const saved = profile?.preferences?.filterRegions ?? EMPTY_SELECTION;
-  const selectedBranches = saved.length ? saved : ALL_BRANCHES;
+  const selectedBranches = saved.length ? saved : allBranches;
 
   // Applies + persists immediately, rejecting on save failure so callers that
   // want to show explicit save feedback (e.g. a Save button) can catch it.
-  const applyBranches = useCallback((next: string[]) => updateFilterRegions(normalize(next)), [updateFilterRegions]);
+  const applyBranches = useCallback(
+    (next: string[]) =>
+      updateFilterRegions(next.length === 0 || next.length === allBranches.length ? EMPTY_SELECTION : next),
+    [updateFilterRegions, allBranches],
+  );
 
   // Fire-and-forget variant for pages that just want instant apply with no
   // save UI of their own.

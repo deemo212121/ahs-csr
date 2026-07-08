@@ -2,7 +2,21 @@ import type { NextRequest } from 'next/server';
 import { getFirebaseAdminAuth } from '@/lib/firebase/admin';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { getErSupabaseAdmin, isErSupabaseConfigured } from '@/lib/supabase/er-admin';
+import { resolveDefaultCompanyId } from '@/lib/er-ticket-database';
 import type { AppProfile, AppRole } from '@/lib/types';
+
+// Safety net only — normal registration always saves a real company_id
+// chosen at signup. This only fires for accounts auto-provisioned outside
+// that flow (e.g. a first Supabase-session login for a pre-migration
+// customer with no row yet).
+async function resolveFallbackCompanyId(): Promise<string> {
+  if (!isErSupabaseConfigured()) {
+    throw new Error('Unable to resolve a default company for this account — ER Supabase is not configured.');
+  }
+  const erSupabase = getErSupabaseAdmin();
+  if (!erSupabase) throw new Error('Unable to resolve a default company for this account.');
+  return resolveDefaultCompanyId(erSupabase);
+}
 
 export type ProfileSource = 'local' | 'er' | 'test';
 
@@ -212,7 +226,7 @@ function isTestLoginAllowed() {
   );
 }
 
-const profileSelect = 'id, firebase_uid, supabase_user_id, role, first_name, last_name, email, phone_number, address, region, city, state, zip_code, is_active, created_at';
+const profileSelect = 'id, firebase_uid, supabase_user_id, company_id, role, first_name, last_name, email, phone_number, address, region, city, state, zip_code, is_active, created_at';
 
 async function getTestAuthContext(role: AppRole): Promise<AuthContext> {
   const fallbackProfile = testProfiles[role];
@@ -285,11 +299,13 @@ async function getSupabaseCustomerContext(accessToken: string): Promise<AuthCont
   if (!profile) {
     const fullName = typeof supabaseUser.user_metadata?.full_name === 'string' ? supabaseUser.user_metadata.full_name : '';
     const parts = fullName.trim().split(/\s+/).filter(Boolean);
+    const companyId = await resolveFallbackCompanyId();
     const { data: created, error: createError } = await supabaseAdmin
       .from('profiles')
       .insert({
         supabase_user_id: supabaseUser.id,
         firebase_uid: null,
+        company_id: companyId,
         role: 'customer',
         email,
         first_name: typeof supabaseUser.user_metadata?.first_name === 'string' ? supabaseUser.user_metadata.first_name : (parts[0] ?? ''),
@@ -366,6 +382,122 @@ async function getSupabaseCustomerContext(accessToken: string): Promise<AuthCont
   };
 }
 
+// Customers now authenticate through Firebase exactly like staff do — same
+// verifyIdToken() call, same "look up a profile row by firebase_uid" shape
+// as getErStaffContext above. The one structural difference: staff rows are
+// provisioned ahead of time by an ER administrator in a different database,
+// so a missing row is an error. Customers self-register through this app,
+// so /api/customer/register creates the row right after sign-up — but this
+// still auto-creates a bare-bones one as a safety net if that step ever
+// failed to run, rather than locking the customer out entirely.
+async function getCustomerFirebaseContext(firebaseUid: string, tokenEmail: string): Promise<AuthContext> {
+  const supabaseAdmin = getSupabaseAdmin();
+  const { data: profile, error } = await supabaseAdmin
+    .from('profiles')
+    .select(profileSelect)
+    .eq('firebase_uid', firebaseUid)
+    .maybeSingle();
+
+  if (error) throw new Error(error.message);
+
+  if (!profile) {
+    // No row for this uid yet. Before inserting, check whether this email
+    // already has a row — e.g. a customer who registered back when auth was
+    // Supabase-only. profiles.email is unique, so a blind insert here would
+    // collide with that pre-existing row instead of adopting it. If we find
+    // one and it's still unlinked, this is that legacy account signing in
+    // through Firebase for the first time: attach this uid to it (lazy
+    // migration) rather than creating a duplicate.
+    const { data: byEmail, error: byEmailError } = await supabaseAdmin
+      .from('profiles')
+      .select(profileSelect)
+      .eq('email', tokenEmail)
+      .maybeSingle();
+
+    if (byEmailError) throw new Error(byEmailError.message);
+
+    if (byEmail) {
+      if (byEmail.firebase_uid && byEmail.firebase_uid !== firebaseUid) {
+        throw new Error('This email is already linked to a different account.');
+      }
+      if (byEmail.role !== 'customer') {
+        throw new Error('This Firebase account is not registered as a customer.');
+      }
+      if (!byEmail.is_active) {
+        throw new Error('This account is inactive.');
+      }
+
+      const { data: linked, error: linkError } = await supabaseAdmin
+        .from('profiles')
+        .update({ firebase_uid: firebaseUid })
+        .eq('id', byEmail.id)
+        .select(profileSelect)
+        .single();
+
+      if (linkError || !linked) {
+        throw new Error(linkError?.message ?? 'Unable to link this account.');
+      }
+
+      return {
+        firebaseUid,
+        firebaseIdToken: null,
+        supabaseUserId: linked.supabase_user_id,
+        email: linked.email || tokenEmail,
+        role: 'customer',
+        profile: linked as AppProfile,
+        profileSource: 'local',
+      };
+    }
+
+    const companyId = await resolveFallbackCompanyId();
+    const { data: created, error: createError } = await supabaseAdmin
+      .from('profiles')
+      .insert({
+        firebase_uid: firebaseUid,
+        supabase_user_id: null,
+        company_id: companyId,
+        role: 'customer',
+        email: tokenEmail,
+        first_name: '',
+        last_name: '',
+        is_active: true,
+      })
+      .select(profileSelect)
+      .single();
+
+    if (createError || !created) {
+      throw new Error(createError?.message ?? 'Unable to create customer profile.');
+    }
+
+    return {
+      firebaseUid,
+      firebaseIdToken: null,
+      supabaseUserId: null,
+      email: tokenEmail,
+      role: 'customer',
+      profile: created as AppProfile,
+      profileSource: 'local',
+    };
+  }
+
+  if (profile.role !== 'customer') {
+    throw new Error('This Firebase account is not registered as a customer.');
+  }
+  if (!profile.is_active) {
+    throw new Error('This account is inactive.');
+  }
+
+  return {
+    firebaseUid,
+    firebaseIdToken: null,
+    supabaseUserId: null,
+    email: profile.email || tokenEmail,
+    role: 'customer',
+    profile: profile as AppProfile,
+    profileSource: 'local',
+  };
+}
+
 async function attachPreferences(context: AuthContext): Promise<AuthContext> {
   if (!context.firebaseUid) return context;
   try {
@@ -407,8 +539,27 @@ export async function getAuthContext(request: NextRequest): Promise<AuthContext>
   const decoded = await getFirebaseAdminAuth().verifyIdToken(token);
   const firebaseUid = decoded.uid;
   const email = decoded.email ?? '';
-  const context = await getErStaffContext(firebaseUid, email);
-  return attachPreferences({ ...context, firebaseIdToken: token });
+
+  // Staff and customers now share one Firebase project, disambiguated by
+  // lookup rather than anything in the token itself. Staff is tried first
+  // so their behavior/latency is completely unchanged from before this
+  // customer path existed — it only ever falls through to the customer
+  // lookup for a uid that isn't a staff profile.
+  try {
+    const staffContext = await getErStaffContext(firebaseUid, email);
+    return attachPreferences({ ...staffContext, firebaseIdToken: token });
+  } catch (staffError) {
+    try {
+      const customerContext = await getCustomerFirebaseContext(firebaseUid, email);
+      return attachPreferences({ ...customerContext, firebaseIdToken: token });
+    } catch (customerError) {
+      // Real staff accounts always resolve on the first try above, so by the
+      // time both have failed the caller is almost certainly a customer with
+      // a genuine problem (not registered, inactive) — surface that error,
+      // not the staff/ER one, since it's the more actionable message for them.
+      throw customerError instanceof Error ? customerError : staffError instanceof Error ? staffError : new Error('Unable to resolve this account.');
+    }
+  }
 }
 
 export function localProfileId(context: AuthContext) {

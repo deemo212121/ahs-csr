@@ -4,6 +4,7 @@ import type { ServiceRequest } from '@/lib/types';
 import { getErSupabaseAdmin, isErSupabaseConfigured } from '@/lib/supabase/er-admin';
 import { ensureErCustomerLinksForProfile, getLinkedErCustomerIds, matchErCustomersToLocalProfiles } from '@/lib/er-customer-links';
 import { listErModeRequests, useErTicketDatabase } from '@/lib/er-ticket-database';
+import { sendPushToProfile, sendPushToProfiles } from '@/lib/push/send';
 
 export type TicketMessageRequest = {
   id: string;
@@ -334,7 +335,14 @@ function mapErTicketToThreadInsert(ticket: ErTicketRow, customer: ErCustomerRow 
     ticket_status: cleanString(ticket.status),
     subject: `${ticketNo} • ${product}`,
     status: 'open',
+    // This thread is being auto-created from a bulk ER-ticket sync, not a
+    // fresh customer message staff need to act on — most of what this
+    // discovers is old/historical tickets nobody has touched yet. Pre-mark
+    // it read for staff so it doesn't inflate the unread badge with
+    // hundreds of system-generated placeholders; the customer side is left
+    // unread since this genuinely is the first update they'll see.
     last_message_at: new Date().toISOString(),
+    staff_last_read_at: new Date().toISOString(),
   };
 }
 
@@ -1067,6 +1075,14 @@ async function ensureErTicketThreads(
           .from('ticket_message_threads')
           .update({
             last_message_at: update.lastMessageAt,
+            // Same reasoning as the initial bulk-import pre-mark above: this
+            // is an automated "ticket_update" system note (a status/field
+            // change synced from ER), not a real message a CSR needs to act
+            // on. Without this, every routine ER edit would permanently
+            // re-flag the thread unread for every staff member, inflating
+            // the badge with housekeeping noise nobody can ever "clear".
+            // Left untouched for the customer, who should still see it as new.
+            staff_last_read_at: update.lastMessageAt,
             updated_at: new Date().toISOString(),
             ticket_status: update.ticketStatus,
           })
@@ -1338,6 +1354,7 @@ export async function getThreadMessages(
   // Viewing a thread's messages is what "reading" it means — touch this
   // viewer's own read column so it drops off their unread count. This is
   // best-effort: a failure here shouldn't block showing the messages.
+  const wasUnread = isThreadUnread(thread, auth.role);
   const readColumn = readColumnForRole(auth.role);
   const nowIso = new Date().toISOString();
   await supabaseAdmin
@@ -1355,6 +1372,9 @@ export async function getThreadMessages(
       request: request ?? threadRequestFromThread(thread),
     },
     messages: (messages ?? []) as TicketMessage[],
+    // Lets the caller ping the nav badge only on the actual unread->read
+    // transition, not on every background poll of an already-read thread.
+    justMarkedRead: wasUnread,
   };
 }
 
@@ -1404,7 +1424,60 @@ export async function createTicketMessage(
     .update({ last_message_at: now, updated_at: now, [readColumnForRole(auth.role)]: now })
     .eq('id', thread.id);
 
+  await notifyNewTicketMessage(supabaseAdmin, auth, thread, message as TicketMessage);
+
   return message as TicketMessage;
+}
+
+// Best-effort push notification for the party who didn't just send this
+// message — never awaited by the caller in a way that could fail the send
+// itself, since a missed notification shouldn't block the actual message.
+async function notifyNewTicketMessage(
+  supabaseAdmin: SupabaseClient,
+  auth: AuthContext,
+  thread: TicketMessageThread,
+  message: TicketMessage,
+) {
+  try {
+    const preview = message.message_body.length > 120 ? `${message.message_body.slice(0, 120)}...` : message.message_body;
+    const url = auth.role === 'customer' ? '/customer/messages' : '/csr/messages';
+
+    if (auth.role === 'customer') {
+      if (!thread.customer_id) return;
+      // Notify every active staff member at this customer's company — there
+      // is no single assigned CSR for a thread, any of them may answer it.
+      const companyId = auth.profile.company_id;
+      if (!companyId || !isErSupabaseConfigured()) return;
+      const erSupabase = getErSupabaseAdmin();
+      if (!erSupabase) return;
+
+      const table = process.env.ER_PROFILES_TABLE?.trim() || 'profiles';
+      const { data: staff } = await erSupabase
+        .from(table)
+        .select('id')
+        .eq('company_id', companyId)
+        .eq('is_active', true)
+        .limit(200);
+
+      const staffProfiles = ((staff ?? []) as Array<{ id: string }>).map((row) => ({ id: row.id, source: 'er' as const }));
+      if (!staffProfiles.length) return;
+
+      await sendPushToProfiles(supabaseAdmin, staffProfiles, {
+        title: `New message: ${thread.customer_name || 'Customer'}`,
+        body: preview,
+        url: `/csr/messages?thread=${thread.id}`,
+      });
+    } else {
+      if (!thread.customer_id) return;
+      await sendPushToProfile(supabaseAdmin, thread.customer_id, 'local', {
+        title: 'New message about your ticket',
+        body: preview,
+        url,
+      });
+    }
+  } catch {
+    // Push is a nice-to-have — never let a delivery failure surface here.
+  }
 }
 
 // Manually locks a conversation. This is the only way a thread closes now —

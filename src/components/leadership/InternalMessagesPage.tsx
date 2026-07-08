@@ -4,7 +4,7 @@ import { CalendarDays, CheckCircle2, ClipboardList, Mail, MailOpen, MessageSquar
 import { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '@/components/AuthProvider';
 import { fetchJsonWithFirebase } from '@/lib/auth/client';
-import { BRANCHES } from '@/lib/branches';
+import { useBranches } from '@/lib/useBranches';
 import { BranchCheckboxDropdown } from '@/components/BranchCheckboxDropdown';
 import { useBranchFilter } from '@/lib/useBranchFilter';
 
@@ -180,7 +180,7 @@ export function InternalMessagesPage({
     [threads],
   );
 
-  const branchOptions = useMemo(() => [...BRANCHES], []);
+  const { branches: branchOptions } = useBranches();
   const { selectedBranches, setSelectedBranches } = useBranchFilter();
 
   const filteredThreads = useMemo(() => {
@@ -312,7 +312,14 @@ export function InternalMessagesPage({
 
   useEffect(() => {
     if (activeThread?.id) {
-      loadMessages(activeThread.id);
+      const openedId = activeThread.id;
+      // Clear this one thread's badge the instant it's opened, rather than
+      // waiting up to 4s for the next poll to reflect the server-side
+      // read-state update — every other thread's count is left untouched.
+      setThreads((current) =>
+        current.map((item) => (item.id === openedId ? { ...item, unread: false, unread_count: 0 } : item)),
+      );
+      loadMessages(openedId);
     } else {
       setMessages([]);
     }

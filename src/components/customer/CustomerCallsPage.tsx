@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { BellRing, Headphones, PhoneCall, PhoneOff, RefreshCw, ShieldCheck } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import { fetchJsonWithFirebase } from '@/lib/auth/client';
@@ -34,18 +34,29 @@ export function CustomerCallsPage() {
     [calls],
   );
 
+  // Two poll cadences run at once (6s while waiting, 12s once accepted — see
+  // below), and the interval that starts just before a CSR accepts can still
+  // resolve *after* a faster/later tick that already reflects the accepted
+  // status. Without sequencing, that stale response wins and briefly flips
+  // the call back to "not accepted" — which tears down and rebuilds the
+  // WebRTC connection in WebRtcCallRoom, looking like a drop-and-rejoin.
+  const requestSeqRef = useRef(0);
+
   const loadCalls = useCallback(async (silent = false) => {
     if (!user) return;
     if (!silent) setLoading(true);
     setError(null);
+    const seq = ++requestSeqRef.current;
     try {
       const data = await fetchJsonWithFirebase<RtcCallListResponse>(user, '/api/calls?history=true&limit=20');
+      if (seq !== requestSeqRef.current) return;
       if (data.setup_required) throw new Error(data.message || 'Web call queue setup is missing.');
       setCalls(data.calls);
     } catch (err) {
+      if (seq !== requestSeqRef.current) return;
       setError(err instanceof Error ? err.message : 'Unable to load your calls.');
     } finally {
-      if (!silent) setLoading(false);
+      if (seq === requestSeqRef.current && !silent) setLoading(false);
     }
   }, [user]);
 

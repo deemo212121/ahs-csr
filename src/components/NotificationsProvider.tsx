@@ -8,6 +8,7 @@ import { useToastQueue } from '@/lib/notifications/useToastQueue';
 import { playNotificationSound } from '@/lib/notifications/sounds';
 import { dispatchLiveUpdate } from '@/lib/notifications/useLiveUpdate';
 import { NotificationToastStack } from '@/components/NotificationToastStack';
+import { PushNotificationOptIn } from '@/components/PushNotificationOptIn';
 import type { NotificationCategory } from '@/lib/notifications/settings';
 import type { AppRole } from '@/lib/types';
 
@@ -57,7 +58,10 @@ export function NotificationsProvider({ children }: { children: React.ReactNode 
     regionFilter,
   });
   const messagesFeed = useNotificationFeed('messages', user, {
-    enabled: isAgentPortal,
+    // Unlike verify/calls (staff-only concepts), customers have their own
+    // messages too — their "Messages" nav badge relies on this same feed,
+    // so it needs to stay enabled for them, not just for staff.
+    enabled: isAgentPortal || role === 'customer',
     onNewArrival: () => onArrival('messages'),
   });
   const callsFeed = useNotificationFeed('calls', user, {
@@ -76,6 +80,7 @@ export function NotificationsProvider({ children }: { children: React.ReactNode 
   return (
     <NotificationsContext.Provider value={value}>
       {children}
+      <PushNotificationOptIn />
       {isAgentPortal ? (
         <NotificationToastStack
           basePath={base}

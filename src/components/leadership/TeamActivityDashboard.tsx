@@ -405,15 +405,7 @@ export function TeamActivityDashboard({
 
       {selectedTicket ? <TicketSummaryModal request={selectedTicket} onClose={() => setSelectedTicket(null)} /> : null}
       {selectedCall ? (
-        <CallSummaryModal
-          call={selectedCall}
-          user={user}
-          onClose={() => setSelectedCall(null)}
-          onNoteSaved={(updated) => {
-            setCalls((current) => current.map((call) => (call.id === updated.id ? updated : call)));
-            setSelectedCall(updated);
-          }}
-        />
+        <CallSummaryModal call={selectedCall} user={user} onClose={() => setSelectedCall(null)} />
       ) : null}
     </div>
   );

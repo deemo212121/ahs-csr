@@ -565,9 +565,15 @@
 
 .call-room-panel {
   align-self: start;
+  display: flex;
+  flex-direction: column;
   min-height: 420px;
   position: sticky;
   top: 88px;
+}
+
+.call-room-panel .call-room-placeholder {
+  flex: 1 1 auto;
 }
 
 .call-room-placeholder,
@@ -603,6 +609,7 @@
     linear-gradient(180deg, rgba(7, 31, 68, 0.98), rgba(4, 14, 34, 0.98));
   border: 1px solid rgba(74, 194, 255, 0.34);
   border-radius: 22px;
+  box-sizing: border-box;
   color: #eaf4ff;
   padding: 18px;
 }
@@ -616,21 +623,29 @@
 .webrtc-room-top {
   align-items: flex-start;
   display: flex;
+  flex-wrap: wrap;
   gap: 16px;
   justify-content: space-between;
+}
+
+.webrtc-room-top > div:first-child {
+  min-width: 0;
 }
 
 .webrtc-room-top h3 {
   color: #fff;
   margin: 8px 0 4px;
+  overflow-wrap: break-word;
 }
 
 .webrtc-room-top p {
   color: #aabbd7;
   margin: 0;
+  overflow-wrap: break-word;
 }
 
 .webrtc-anchor {
+  flex: 1 1 auto;
   height: 100%;
   width: 100%;
 }
@@ -663,6 +678,17 @@
   position: fixed;
   top: calc(14px + env(safe-area-inset-top, 0px));
   z-index: 9000;
+}
+
+.webrtc-floating-bar--pip {
+  border-radius: 12px;
+  bottom: 0;
+  height: 100%;
+  left: 0;
+  position: fixed;
+  right: 0;
+  top: 0;
+  width: 100%;
 }
 
 .webrtc-floating-dot {
@@ -761,6 +787,7 @@
 .webrtc-call-stage {
   align-items: center;
   display: flex;
+  flex-wrap: wrap;
   gap: 16px;
   margin: 22px 0;
 }
@@ -774,6 +801,7 @@
   border-radius: 999px;
   box-shadow: 0 0 0 10px rgba(26, 215, 255, 0.08), 0 0 50px rgba(18, 214, 255, 0.24);
   display: flex;
+  flex-shrink: 0;
   height: 96px;
   justify-content: center;
   width: 96px;
@@ -785,13 +813,19 @@
   font-weight: 950;
 }
 
+.webrtc-status-copy {
+  min-width: 0;
+}
+
 .webrtc-status-copy strong {
   color: #fff;
   display: block;
+  overflow-wrap: break-word;
 }
 
 .webrtc-status-copy small {
   color: #9fb4d5;
+  overflow-wrap: break-word;
 }
 
 .webrtc-controls {
@@ -1107,8 +1141,49 @@
   margin: 4px 0 0;
 }
 
-.call-recording-card audio {
+.call-recording-player {
+  align-items: center;
+  display: flex;
+  gap: 10px;
   width: 100%;
+}
+
+.call-recording-play-btn {
+  align-items: center;
+  background: #20e7ff;
+  border: none;
+  border-radius: 50%;
+  box-shadow: 0 2px 8px rgba(32, 231, 255, 0.35);
+  box-sizing: border-box;
+  color: #04122a;
+  cursor: pointer;
+  display: flex;
+  flex-shrink: 0;
+  height: 38px;
+  justify-content: center;
+  padding: 0;
+  transition: transform 0.12s ease;
+  width: 38px;
+}
+
+.call-recording-play-btn:hover {
+  transform: scale(1.06);
+}
+
+.call-recording-time {
+  color: #aabbd7;
+  flex-shrink: 0;
+  font-family: ui-monospace, "SF Mono", "Cascadia Code", monospace;
+  font-size: 0.78rem;
+  font-variant-numeric: tabular-nums;
+  min-width: 34px;
+}
+
+.call-recording-seek {
+  accent-color: #20e7ff;
+  cursor: pointer;
+  flex: 1;
+  min-width: 0;
 }
 
 .call-details-notes h3 {
@@ -2665,15 +2740,18 @@ a {
 }
 
 .cx-unread-count {
+  align-items: center;
   background: #ef4444;
   border-radius: 999px;
   color: #fff;
   display: inline-flex;
   font-size: 0.68rem;
   font-weight: 900;
+  height: 18px;
   justify-content: center;
+  line-height: 1;
   min-width: 18px;
-  padding: 1px 5px;
+  padding: 0 5px;
 }
 
 .cx-thread-read-toggle {
@@ -2695,17 +2773,27 @@ a {
   color: #f87171;
 }
 
-.cx-unread-badge {
+/* Specificity note: .customer-message-head span / .customer-chat-head span
+   (globals.css ~2654) set display:block on every span inside those
+   headers, which — at equal-or-lower specificity — was stretching this
+   badge into a full-width bar. Qualifying with the element name here
+   matches that specificity and wins by coming later in the file. */
+span.cx-unread-badge {
+  align-items: center;
   background: #ef4444;
   border-radius: 999px;
   color: #fff;
   display: inline-flex;
+  flex: 0 0 auto;
   font-size: 0.68rem;
   font-weight: 900;
+  height: 18px;
+  justify-content: center;
+  line-height: 1;
   margin-left: 8px;
   min-width: 18px;
-  padding: 1px 5px;
-  justify-content: center;
+  padding: 0 5px;
+  width: fit-content;
 }
 
 .customer-message-list button span,
@@ -3917,6 +4005,13 @@ h1, h2, h3, h4, h5, h6,
   margin: 0 !important;
 }
 
+.login-company-banner {
+  color: rgba(255,255,255,0.82) !important;
+  font-size: 0.85rem !important;
+  font-weight: 600 !important;
+  margin: 8px 0 0 !important;
+}
+
 .login-body {
   padding: 30px !important;
 }
@@ -4025,6 +4120,36 @@ h1, h2, h3, h4, h5, h6,
   align-items: center !important;
   gap: 8px !important;
   margin-bottom: 1rem !important;
+}
+
+.login-remember-row {
+  justify-content: space-between !important;
+}
+
+.login-remember-row > div {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+}
+
+.login-forgot-link {
+  background: none;
+  border: none;
+  color: #22d3ee;
+  cursor: pointer;
+  font-size: 0.85rem;
+  font-weight: 700;
+  padding: 0;
+}
+
+.login-forgot-link:hover {
+  text-decoration: underline;
+}
+
+.login-reset-form {
+  border-top: 1px solid var(--line);
+  margin-top: 16px;
+  padding-top: 16px;
 }
 
 .form-check-input {
@@ -5111,6 +5236,89 @@ h1, h2, h3, h4, h5, h6,
 .admin-php-table-wrap {
   overflow-x: auto;
   padding: 18px;
+}
+
+.admin-filter-columns {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+@media (max-width: 820px) {
+  .admin-filter-columns {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.admin-filter-column {
+  min-height: 200px;
+}
+
+.admin-branch-drag-list {
+  display: grid;
+  gap: 8px;
+  list-style: none;
+  margin: 0;
+  padding: 18px;
+}
+
+.admin-branch-drag-row {
+  align-items: center;
+  background: rgba(255, 255, 255, 0.045);
+  border: 1px solid rgba(96, 165, 250, 0.22);
+  border-radius: 10px;
+  cursor: grab;
+  display: flex;
+  gap: 10px;
+  padding: 10px 12px;
+}
+
+.admin-branch-drag-row.dragging {
+  background: rgba(23, 189, 212, 0.16);
+  border-color: rgba(23, 189, 212, 0.5);
+  opacity: 0.6;
+}
+
+.admin-branch-drag-handle {
+  align-items: center;
+  color: #9fb4d5;
+  display: inline-flex;
+}
+
+.admin-branch-drag-name {
+  color: #f8fafc;
+  flex: 1;
+  font-weight: 800;
+}
+
+.admin-branch-drag-delete {
+  align-items: center;
+  background: rgba(248, 113, 113, 0.14);
+  border: 1px solid rgba(248, 113, 113, 0.3);
+  border-radius: 8px;
+  color: #fca5a5;
+  cursor: pointer;
+  display: inline-flex;
+  height: 30px;
+  justify-content: center;
+  width: 30px;
+}
+
+.admin-branch-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 18px;
+}
+
+.admin-branch-chip {
+  background: rgba(23, 189, 212, 0.14);
+  border: 1px solid rgba(23, 189, 212, 0.24);
+  border-radius: 999px;
+  color: #dff9ff;
+  font-size: 0.78rem;
+  font-weight: 800;
+  padding: 5px 12px;
 }
 
 .admin-php-table {
@@ -6407,6 +6615,21 @@ html[data-theme="light"] .notification-toast-close:hover {
 .agent-notification-panel {
   border-radius: 10px;
   width: min(340px, calc(100vw - 32px));
+}
+
+@media (max-width: 720px) {
+  /* Same overflow risk as .customer-notification-menu (see that rule's
+     comment): the bell isn't the rightmost icon in this header either
+     (realtime status/theme toggle/settings sit further right), so
+     right: 0 relative to the small bell button pushes this off the left
+     edge on narrow screens. Anchor to the viewport instead. */
+  .agent-notification-panel {
+    left: 10px;
+    position: fixed;
+    right: 10px;
+    top: 72px;
+    width: auto;
+  }
 }
 
 .agent-popover-head {
@@ -8107,7 +8330,26 @@ html[data-theme="light"] .notification-toast-close:hover {
   flex: 0 0 auto;
   height: 38px;
   justify-content: center;
+  position: relative;
   width: 38px;
+}
+
+.customer-notif-dot {
+  align-items: center;
+  background: #ef4444;
+  border-radius: 999px;
+  color: #fff;
+  display: inline-flex;
+  font-size: 0.62rem;
+  font-weight: 900;
+  height: 16px;
+  justify-content: center;
+  line-height: 1;
+  min-width: 16px;
+  padding: 0 3px;
+  position: absolute;
+  right: -4px;
+  top: -4px;
 }
 
 .customer-icon-btn {
@@ -8205,9 +8447,15 @@ html[data-theme="light"] .notification-toast-close:hover {
 }
 
 .customer-notification-menu-item {
+  color: #e7eef8;
   display: flex;
   gap: 11px;
   padding: 13px 16px;
+  text-decoration: none;
+}
+
+a.customer-notification-menu-item:hover {
+  background: rgba(255, 255, 255, 0.04);
 }
 
 .customer-notification-menu-item > span {
@@ -8946,8 +9194,16 @@ html[data-theme="light"] .notification-toast-close:hover {
   }
 
   .customer-notification-menu {
-    right: -52px;
-    width: min(330px, calc(100vw - 20px));
+    /* The bell isn't the rightmost icon in the topbar (messages/theme/avatar
+       sit further right), so anchoring this to the bell button's own edges
+       (position: absolute; right: 0) pushed most of the panel off the left
+       edge of narrow screens. Anchoring to the viewport instead guarantees
+       it always fits regardless of how many icons sit to its right. */
+    left: 10px;
+    position: fixed;
+    right: 10px;
+    top: 72px;
+    width: auto;
   }
 
   .cx-welcome-panel {
@@ -9075,6 +9331,14 @@ html[data-theme="light"] .notification-toast-close:hover {
     height: auto;
     min-height: 200px;
     width: 100%;
+  }
+
+  /* The active call room needs real room for its title, avatar/status row,
+     and three control buttons — 200px (enough for the plain "waiting" card)
+     left most of it overflowing past the portal container's bounds with
+     nowhere to go, spilling down behind the fixed bottom nav bar. */
+  .webrtc-anchor {
+    min-height: 460px;
   }
 
   .customer-call-action-panel,
@@ -9352,6 +9616,15 @@ html[data-theme="light"] .notification-toast-close:hover {
 .er-ticket-list-table td:nth-child(10) {
   white-space: normal;
   min-width: 130px;
+}
+
+.er-note-cell {
+  max-width: 130px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  width: 130px;
 }
 
 .er-ticket-no,
@@ -9969,8 +10242,7 @@ html[data-theme="light"] .verification-modal-footer {
   min-width: 1620px;
 }
 
-.er-ticket-list-table td:nth-child(4),
-.er-ticket-list-table td:nth-child(9) {
+.er-ticket-list-table td:nth-child(4) {
   white-space: normal;
   min-width: 130px;
 }
@@ -14198,6 +14470,37 @@ html[data-theme="light"] .csr-calls-panel .agent-table-body::-webkit-scrollbar-t
   margin: 0;
 }
 
+.csr-note-list {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.csr-note-entry {
+  background: rgba(3, 16, 39, 0.5);
+  border-left: 2px solid rgba(34, 211, 238, 0.5);
+  border-radius: 0 8px 8px 0;
+  padding: 8px 10px;
+}
+
+.csr-note-entry + .csr-note-entry {
+  margin-top: 0;
+}
+
+.csr-note-timestamp {
+  color: #7fa3d1;
+  display: block;
+  font-family: ui-monospace, "SF Mono", "Cascadia Code", monospace;
+  font-size: 0.7rem;
+  margin-bottom: 3px;
+}
+
+.csr-note-entry p {
+  color: #edf6ff;
+  font-size: 0.86rem;
+  margin: 0;
+}
+
 .csr-note-form {
   display: grid;
   gap: 8px;
@@ -14293,6 +14596,18 @@ html[data-theme="light"] .csr-summary-notes h3 {
 
 html[data-theme="light"] .csr-summary-notes p {
   color: #1e293b;
+}
+
+html[data-theme="light"] .csr-note-entry {
+  background: #f1f5f9;
+}
+
+html[data-theme="light"] .csr-note-entry p {
+  color: #1e293b;
+}
+
+html[data-theme="light"] .csr-note-timestamp {
+  color: #64748b;
 }
 
 .csr-ticket-scope-panel {
@@ -15918,6 +16233,40 @@ html[data-theme="light"] .admin-log-main p {
 html[data-theme="light"] .admin-log-tags span,
 html[data-theme="light"] .admin-log-tags b {
   color: #0f172a;
+}
+
+html[data-theme="light"] .admin-php-notice {
+  color: #047857;
+}
+
+html[data-theme="light"] .admin-branch-drag-row {
+  background: #f8fafc;
+  border-color: rgba(15, 23, 42, 0.12);
+}
+
+html[data-theme="light"] .admin-branch-drag-row.dragging {
+  background: rgba(23, 189, 212, 0.12);
+  border-color: rgba(23, 189, 212, 0.45);
+}
+
+html[data-theme="light"] .admin-branch-drag-handle {
+  color: #64748b;
+}
+
+html[data-theme="light"] .admin-branch-drag-name {
+  color: #0f172a;
+}
+
+html[data-theme="light"] .admin-branch-drag-delete {
+  background: rgba(220, 38, 38, 0.08);
+  border-color: rgba(220, 38, 38, 0.24);
+  color: #dc2626;
+}
+
+html[data-theme="light"] .admin-branch-chip {
+  background: rgba(23, 189, 212, 0.1);
+  border-color: rgba(23, 189, 212, 0.28);
+  color: #0f766e;
 }
 
 html[data-theme="light"] .register-page-shell {
@@ -17781,6 +18130,79 @@ html[data-theme="light"] .customer-filter-chips button.active {
   animation: nav-badge-pulse 1s ease-out 2;
 }
 
+/* --- Biometric login -------------------------------------- */
+.cx-biometric-card {
+  margin-top: 16px;
+}
+
+.cx-biometric-toggle-row {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  margin-top: 8px;
+}
+
+.login-biometric-btn {
+  align-items: center;
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 999px;
+  color: inherit;
+  cursor: pointer;
+  display: flex;
+  font-weight: 600;
+  gap: 8px;
+  justify-content: center;
+  margin-bottom: 14px;
+  padding: 10px;
+  width: 100%;
+}
+
+.login-biometric-btn:disabled {
+  opacity: 0.6;
+}
+
+/* --- Push notification opt-in banner ---------------------- */
+.push-optin-banner {
+  align-items: center;
+  background: #1f2937;
+  border-radius: 12px;
+  bottom: 16px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+  color: #fff;
+  display: flex;
+  gap: 10px;
+  left: 16px;
+  max-width: 420px;
+  padding: 12px 14px;
+  position: fixed;
+  right: 16px;
+  z-index: 9998;
+}
+
+.push-optin-banner span {
+  flex: 1;
+  font-size: 0.85rem;
+}
+
+.push-optin-banner button {
+  background: #4f46e5;
+  border: none;
+  border-radius: 999px;
+  color: #fff;
+  cursor: pointer;
+  flex-shrink: 0;
+  font-size: 0.8rem;
+  font-weight: 700;
+  padding: 6px 14px;
+}
+
+.push-optin-dismiss {
+  background: transparent !important;
+  padding: 4px !important;
+}
+
 /* --- Real notification panel items ---------------------- */
 .agent-notification-item--link {
   cursor: pointer;
@@ -17936,6 +18358,98 @@ html[data-theme="light"] .realtime-status {
   accent-color: #38bdf8;
   height: 15px;
   width: 15px;
+}
+
+.notification-settings-push-row {
+  display: block;
+}
+
+.push-toggle-row {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+}
+
+.push-toggle-label {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+}
+
+.push-toggle-switch {
+  align-items: center;
+  cursor: pointer;
+  display: flex;
+  gap: 8px;
+  width: fit-content;
+}
+
+/* --- Reusable sliding toggle switch (biometrics / notifications) -------- */
+.toggle-switch {
+  display: inline-flex;
+  flex-shrink: 0;
+  height: 24px;
+  position: relative;
+  width: 42px;
+}
+
+.toggle-switch input[type="checkbox"] {
+  cursor: pointer;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  position: absolute;
+  width: 100%;
+  z-index: 1;
+}
+
+.toggle-switch-track {
+  background: rgba(148, 163, 184, 0.35);
+  border-radius: 999px;
+  inset: 0;
+  pointer-events: none;
+  position: absolute;
+  transition: background 0.18s ease;
+}
+
+.toggle-switch-track::before {
+  background: #fff;
+  border-radius: 50%;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+  content: "";
+  height: 20px;
+  left: 2px;
+  position: absolute;
+  top: 2px;
+  transition: transform 0.18s ease;
+  width: 20px;
+}
+
+.toggle-switch input:checked + .toggle-switch-track {
+  background: #4f46e5;
+}
+
+.toggle-switch input:checked + .toggle-switch-track::before {
+  transform: translateX(18px);
+}
+
+.toggle-switch input:disabled + .toggle-switch-track {
+  opacity: 0.55;
+}
+
+.toggle-switch input:disabled {
+  cursor: not-allowed;
+}
+
+.push-toggle-hint {
+  color: #94a3b8;
+  font-size: 0.78rem;
+}
+
+.push-toggle-error {
+  font-size: 0.8rem;
+  margin: 0;
 }
 
 .notification-settings-test-btn {

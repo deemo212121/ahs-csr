@@ -8,7 +8,7 @@ import { fetchJsonWithFirebase } from '@/lib/auth/client';
 import { useAuth } from '@/components/AuthProvider';
 import { StickyHorizontalScroll } from '@/components/StickyHorizontalScroll';
 import type { ServiceRequest } from '@/lib/types';
-import { BRANCHES } from '@/lib/branches';
+import { useBranches } from '@/lib/useBranches';
 import { BranchCheckboxDropdown } from '@/components/BranchCheckboxDropdown';
 import { useBranchFilter } from '@/lib/useBranchFilter';
 import { isPresenceOnline, usePresenceMap } from '@/lib/presence/usePresenceMap';
@@ -564,7 +564,7 @@ export function VerificationQueue() {
 
   useLiveUpdate('verify', () => { void load(); });
 
-  const branchOptions = useMemo(() => [...BRANCHES], []);
+  const { branches: branchOptions } = useBranches();
   const { selectedBranches, setSelectedBranches } = useBranchFilter();
 
   const visible = useMemo(() => {

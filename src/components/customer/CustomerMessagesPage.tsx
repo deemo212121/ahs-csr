@@ -188,7 +188,14 @@ export function CustomerMessagesPage() {
 
   useEffect(() => {
     if (selectedThread?.id) {
-      loadMessages(selectedThread.id);
+      const openedId = selectedThread.id;
+      // Clear this one thread's badge the instant it's opened, rather than
+      // waiting up to 4s for the next poll to reflect the server-side
+      // read-state update — every other thread's count is left untouched.
+      setThreads((current) =>
+        current.map((item) => (item.id === openedId ? { ...item, unread: false, unread_count: 0 } : item)),
+      );
+      loadMessages(openedId);
     } else {
       setMessages([]);
     }

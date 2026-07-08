@@ -13,6 +13,16 @@ function empty(value?: string | number | boolean | null) {
   return String(value);
 }
 
+// The Internal Note can run to several sentences (labor/parts breakdowns,
+// coverage lists, etc.) — showing it in full blew up the row height for
+// every other ticket in the list. Truncate here; the ticket number link
+// still opens the full, untruncated text in the details modal below.
+function truncate(value?: string | number | boolean | null, max = 24) {
+  const text = empty(value);
+  if (text === '—' || text.length <= max) return text;
+  return `${text.slice(0, max).trimEnd()}…`;
+}
+
 function yn(value?: boolean | null) {
   if (value === true) return 'Y';
   if (value === false) return 'N';
@@ -259,7 +269,9 @@ export function ErTicketListTable({
                   <td>{empty(er?.location || request.region)}</td>
                   <td>{productText(request)}</td>
                   <td>{empty(er?.model || request.model_number)}</td>
-                  <td>{empty(er?.internal_note || request.special_request)}</td>
+                  <td className="er-note-cell" title={empty(er?.internal_note || request.special_request)}>
+                    {truncate(er?.internal_note || request.special_request)}
+                  </td>
                   <td>{yn(er?.diagnosed)}</td>
                   <td>{empty(er?.technician)}</td>
                   <td>{yn(er?.customer_pref)}</td>

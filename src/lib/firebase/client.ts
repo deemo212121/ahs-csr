@@ -1,7 +1,7 @@
 'use client';
 
 import { initializeApp, getApps } from 'firebase/app';
-import { getAuth } from 'firebase/auth';
+import { browserLocalPersistence, getAuth, indexedDBLocalPersistence, initializeAuth } from 'firebase/auth';
 
 const requiredValues = [
   process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -25,4 +25,23 @@ export const firebaseApp = isFirebaseConfigured
     : initializeApp(firebaseConfig)
   : null;
 
-export const firebaseAuth = firebaseApp ? getAuth(firebaseApp) : null;
+// getAuth()'s default persistence is auto-detected, and that detection can
+// misfire in a Capacitor WebView (or restrictive/partitioned storage
+// contexts) — falling back to in-memory, session-only persistence and
+// forcing a fresh login every time the app/browser is closed and reopened.
+// Being explicit about the persistence chain (IndexedDB, then localStorage)
+// avoids relying on that auto-detection.
+function createFirebaseAuth() {
+  if (!firebaseApp) return null;
+  try {
+    return initializeAuth(firebaseApp, {
+      persistence: [indexedDBLocalPersistence, browserLocalPersistence],
+    });
+  } catch {
+    // Already initialized for this app (e.g. Next.js Fast Refresh
+    // re-running this module) — reuse the existing instance.
+    return getAuth(firebaseApp);
+  }
+}
+
+export const firebaseAuth = createFirebaseAuth();

@@ -252,12 +252,56 @@ export async function matchErCustomersToLocalProfiles(
   const localProfiles = profiles as AppProfile[];
   const newLinks: Omit<ErCustomerLink, 'id'>[] = [];
 
+  // matchCustomer/matchCustomerByName are exact-match only (normalized
+  // phone/email/name equality, no fuzzy logic) — comparing every unlinked ER
+  // customer against every one of up to 10,000 local profiles was an O(n*m)
+  // scan that could run into the hundreds of thousands of comparisons on a
+  // single request, which is exactly what was blowing through Cloudflare's
+  // per-request CPU limit on /api/messages/threads. Since every match key is
+  // an exact string, index profiles by each key once (O(m)) and look up
+  // candidates per customer (O(1)) instead of rescanning the whole list.
+  const phoneIndex = new Map<string, AppProfile[]>();
+  const emailIndex = new Map<string, AppProfile[]>();
+  const fullNameIndex = new Map<string, AppProfile[]>();
+  const splitNameIndex = new Map<string, AppProfile[]>();
+  const addTo = (index: Map<string, AppProfile[]>, key: string | null, profile: AppProfile) => {
+    if (!key) return;
+    const list = index.get(key);
+    if (list) list.push(profile);
+    else index.set(key, [profile]);
+  };
+  for (const profile of localProfiles) {
+    addTo(phoneIndex, normalizePhone(profile.phone_number), profile);
+    addTo(emailIndex, normalizeEmail(profile.email), profile);
+    const fullName = normalizeName(profileFullName(profile));
+    addTo(fullNameIndex, fullName, profile);
+    const first = normalizeName(profile.first_name);
+    const last = normalizeName(profile.last_name);
+    if (first && last) addTo(splitNameIndex, `${first}|${last}`, profile);
+  }
+
   for (const customer of unlinkedCustomers) {
     const erCustomerId = cleanString(customer.id);
     if (!erCustomerId) continue;
 
+    const erPhone = normalizePhone(cleanString(customer.phone));
+    const erSecondPhone = normalizePhone(cleanString(customer.second_phone));
+    const erEmail = normalizeEmail(cleanString(customer.email));
+    const erName = normalizeName(erCustomerName(customer));
+    const erFirst = normalizeName(cleanString(customer.first_name));
+    const erLast = normalizeName(cleanString(customer.last_name));
+
+    const candidates = new Set<AppProfile>();
+    for (const p of phoneIndex.get(erPhone ?? '') ?? []) candidates.add(p);
+    for (const p of phoneIndex.get(erSecondPhone ?? '') ?? []) candidates.add(p);
+    for (const p of emailIndex.get(erEmail ?? '') ?? []) candidates.add(p);
+    for (const p of fullNameIndex.get(erName ?? '') ?? []) candidates.add(p);
+    if (erFirst && erLast) {
+      for (const p of splitNameIndex.get(`${erFirst}|${erLast}`) ?? []) candidates.add(p);
+    }
+
     let best: { profile: AppProfile; score: number; method: string; confidence: string } | null = null;
-    for (const profile of localProfiles) {
+    for (const profile of candidates) {
       const match = matchCustomer(profile, customer) ?? matchCustomerByName(profile, customer);
       if (!match) continue;
       if (!best || match.match_score > best.score) {

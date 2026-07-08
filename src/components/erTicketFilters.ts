@@ -57,19 +57,30 @@ export function erTicketSearchHaystack(request: ServiceRequest) {
 
 export function filterErTickets(
   requests: ServiceRequest[],
-  filters: { search?: string; status?: string; location?: string; branches?: string[]; source?: string },
+  filters: { search?: string; status?: string; location?: string; branches?: string[]; knownBranches?: string[]; source?: string },
 ) {
   const needle = (filters.search || '').trim().toLowerCase();
   const status = filters.status || 'all';
   const location = filters.location || 'all';
   const source = filters.source || 'all';
   const branches = filters.branches;
+  const knownBranches = filters.knownBranches;
 
   return requests.filter((request) => {
     if (status !== 'all' && erStatusText(request) !== status) return false;
     if (location !== 'all' && erLocationText(request) !== location) return false;
-    if (branches && branches.length === 0) return false;
-    if (branches && branches.length > 0 && !branches.includes(erLocationText(request))) return false;
+    if (branches) {
+      const ticketLocation = erLocationText(request);
+      // The branch checklist is a fixed, known list of real branches — a
+      // ticket whose ER location is blank/unrecognized (doesn't match any
+      // entry in that list) can never be "checked" by anyone, since it's
+      // not an option in the checklist at all. Excluding it the same way as
+      // an unchecked real branch made it permanently invisible everywhere,
+      // with no way for any CSR to ever see it. Only tickets whose location
+      // resolves to a real, known branch are subject to the checklist.
+      const isKnownBranch = !knownBranches || knownBranches.includes(ticketLocation);
+      if (isKnownBranch && !branches.includes(ticketLocation)) return false;
+    }
     if (source !== 'all' && erSourceText(request) !== source) return false;
     if (!needle) return true;
     return erTicketSearchHaystack(request).includes(needle);

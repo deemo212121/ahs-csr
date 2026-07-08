@@ -1,6 +1,6 @@
 'use client';
 
-import { type FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
+import { type FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Activity,
   CalendarDays,
@@ -23,8 +23,9 @@ import { useAuth } from '@/components/AuthProvider';
 import { fetchJsonWithFirebase } from '@/lib/auth/client';
 import type { RtcCall, RtcCallListResponse, RtcCallStatus } from '@/lib/calls/types';
 import { useCallSession } from '@/components/calls/CallSessionProvider';
+import { CallRecordingPlayer } from '@/components/calls/CallRecordingPlayer';
 import { useLiveUpdate } from '@/lib/notifications/useLiveUpdate';
-import { BRANCHES } from '@/lib/branches';
+import { useBranches } from '@/lib/useBranches';
 import { BranchCheckboxDropdown } from '@/components/BranchCheckboxDropdown';
 import { useBranchFilter } from '@/lib/useBranchFilter';
 import { isPresenceOnline, usePresenceMap } from '@/lib/presence/usePresenceMap';
@@ -490,7 +491,7 @@ function CallDetailsModal({
               <p>{canAccessRecordings ? recordingMessage : 'Recording access is restricted to CSR Managers.'}</p>
             </div>
           </div>
-          {canAccessRecordings && recordingUrl ? <audio controls src={recordingUrl} /> : null}
+          {canAccessRecordings && recordingUrl ? <CallRecordingPlayer src={recordingUrl} /> : null}
         </section>
 
         <section className="call-details-notes">
@@ -522,15 +523,23 @@ export function CallsPage() {
   const [historyStartDate, setHistoryStartDate] = useState('');
   const [historyEndDate, setHistoryEndDate] = useState('');
 
-  const branchOptions = useMemo(() => [...BRANCHES], []);
+  const { branches: branchOptions } = useBranches();
   const { selectedBranches, setSelectedBranches } = useBranchFilter();
 
   const copy = roleHeadline(role);
+
+  // Same out-of-order-response race as the customer call page: two poll
+  // cadences (3s/10s depending on whether a call is active) can overlap
+  // right at an accept/status transition, letting a stale response clobber
+  // a fresher one and briefly flip activeCall's status backwards — which
+  // tears down and rebuilds the WebRTC connection in WebRtcCallRoom.
+  const loadCallsSeqRef = useRef(0);
 
   const loadCalls = useCallback(async (silent = false) => {
     if (!user) return;
     if (!silent) setLoading(true);
     setError(null);
+    const seq = ++loadCallsSeqRef.current;
     try {
       const history = status === 'history' || status === 'completed' || status === 'cancelled';
       const statusParam = status !== 'open' && status !== 'history' ? `&status=${status}` : '';
@@ -538,15 +547,17 @@ export function CallsPage() {
         user,
         `/api/calls?limit=120${history ? '&history=true' : ''}${statusParam}`,
       );
+      if (seq !== loadCallsSeqRef.current) return;
       if (data.setup_required) throw new Error(data.message || 'Web call queue setup is missing.');
       setCalls(data.calls);
       setLastLoadedAt(new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', second: '2-digit' }));
       setActiveCall((current) => current ? data.calls.find((call) => call.id === current.id) ?? current : current);
       setDetailCall((current) => current ? data.calls.find((call) => call.id === current.id) ?? current : current);
     } catch (err) {
+      if (seq !== loadCallsSeqRef.current) return;
       setError(err instanceof Error ? err.message : 'Unable to load call queue.');
     } finally {
-      if (!silent) setLoading(false);
+      if (seq === loadCallsSeqRef.current && !silent) setLoading(false);
     }
   }, [status, user]);
 

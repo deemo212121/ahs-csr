@@ -10,11 +10,11 @@ import {
   UserSquare2,
   X,
 } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useAuth } from '@/components/AuthProvider';
 import { useLeadershipRequests } from '@/components/leadership/useLeadershipRequests';
 import { fetchJsonWithFirebase, type AuthTokenUser } from '@/lib/auth/client';
-import type { RtcCall, RtcCallListResponse } from '@/lib/calls/types';
+import type { CallNote, RtcCall, RtcCallListResponse } from '@/lib/calls/types';
 import type { ServiceRequest } from '@/lib/types';
 
 export function getLastLogin(user: AuthTokenUser | null): string | null {
@@ -117,21 +117,36 @@ export function CallSummaryModal({
   call,
   user,
   onClose,
-  onNoteSaved,
 }: {
   call: RtcCall;
   user: AuthTokenUser | null;
   onClose: () => void;
-  onNoteSaved: (updated: RtcCall) => void;
 }) {
+  const [notes, setNotes] = useState<CallNote[]>([]);
+  const [notesLoading, setNotesLoading] = useState(true);
   const [noteDraft, setNoteDraft] = useState('');
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
-  const hasNote = !!call.notes?.trim();
+  const loadNotes = useCallback(async () => {
+    if (!user) return;
+    setNotesLoading(true);
+    try {
+      const data = await fetchJsonWithFirebase<{ notes: CallNote[] }>(user, `/api/calls/${call.id}/notes`);
+      setNotes(data.notes);
+    } catch {
+      // Best-effort — the add-note form still works even if this list fails to load.
+    } finally {
+      setNotesLoading(false);
+    }
+  }, [call.id, user]);
+
+  useEffect(() => {
+    void loadNotes();
+  }, [loadNotes]);
 
   async function saveNote() {
-    if (!user || saving || hasNote) return;
+    if (!user || saving) return;
     const note = noteDraft.trim();
     if (!note) {
       setSaveError('Note cannot be empty.');
@@ -140,11 +155,12 @@ export function CallSummaryModal({
     setSaving(true);
     setSaveError(null);
     try {
-      const data = await fetchJsonWithFirebase<{ call: RtcCall }>(user, `/api/calls/${call.id}`, {
-        method: 'PATCH',
-        body: JSON.stringify({ action: 'add_note', note }),
+      const data = await fetchJsonWithFirebase<{ note: CallNote }>(user, `/api/calls/${call.id}/notes`, {
+        method: 'POST',
+        body: JSON.stringify({ note }),
       });
-      onNoteSaved({ ...call, ...data.call });
+      setNotes((current) => [...current, data.note]);
+      setNoteDraft('');
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : 'Unable to save note.');
     } finally {
@@ -173,23 +189,36 @@ export function CallSummaryModal({
         </div>
         <div className="csr-summary-notes">
           <h3>Notes</h3>
-          {hasNote ? (
-            <p>{call.notes}</p>
-          ) : (
-            <div className="csr-note-form">
-              <textarea
-                maxLength={1000}
-                onChange={(event) => setNoteDraft(event.target.value)}
-                placeholder="Add a note for this call. This can only be saved once and cannot be edited afterward."
-                rows={3}
-                value={noteDraft}
-              />
-              {saveError ? <p className="csr-note-error">{saveError}</p> : null}
-              <button className="csr-note-save-btn" disabled={saving || !noteDraft.trim()} onClick={() => void saveNote()} type="button">
-                {saving ? 'Saving...' : 'Save Note'}
-              </button>
+          {notesLoading ? <p>Loading notes...</p> : null}
+          {!notesLoading && call.notes?.trim() ? (
+            <div className="csr-note-entry">
+              <p>{call.notes}</p>
             </div>
-          )}
+          ) : null}
+          {!notesLoading && notes.length ? (
+            <div className="csr-note-list">
+              {notes.map((entry) => (
+                <div className="csr-note-entry" key={entry.id}>
+                  <span className="csr-note-timestamp">{formatDateTime(entry.created_at)}</span>
+                  <p>{entry.note}</p>
+                </div>
+              ))}
+            </div>
+          ) : null}
+          {!notesLoading && !notes.length && !call.notes?.trim() ? <p>No notes saved for this call yet.</p> : null}
+          <div className="csr-note-form">
+            <textarea
+              maxLength={1000}
+              onChange={(event) => setNoteDraft(event.target.value)}
+              placeholder="Add a note for this call. Each note is saved with its own timestamp — earlier notes stay as-is."
+              rows={3}
+              value={noteDraft}
+            />
+            {saveError ? <p className="csr-note-error">{saveError}</p> : null}
+            <button className="csr-note-save-btn" disabled={saving || !noteDraft.trim()} onClick={() => void saveNote()} type="button">
+              {saving ? 'Saving...' : 'Add Note'}
+            </button>
+          </div>
         </div>
       </section>
     </div>
@@ -437,15 +466,7 @@ export function CsrDashboard() {
 
       {selectedTicket ? <TicketSummaryModal request={selectedTicket} onClose={() => setSelectedTicket(null)} /> : null}
       {selectedCall ? (
-        <CallSummaryModal
-          call={selectedCall}
-          user={user}
-          onClose={() => setSelectedCall(null)}
-          onNoteSaved={(updated) => {
-            setCalls((current) => current.map((call) => (call.id === updated.id ? updated : call)));
-            setSelectedCall(updated);
-          }}
-        />
+        <CallSummaryModal call={selectedCall} user={user} onClose={() => setSelectedCall(null)} />
       ) : null}
     </div>
   );

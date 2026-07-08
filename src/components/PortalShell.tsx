@@ -135,6 +135,7 @@ const navByRole: Record<AppRole, NavItem[]> = {
       icon: <ClipboardPlus size={17} />,
     },
     { href: "/manager/calls", label: "Calls", icon: <Headphones size={17} /> },
+    { href: "/manager/messages", label: "Messages", icon: <MessageSquare size={17} /> },
   ],
   admin: [
     { href: "/admin/dashboard", label: "Dashboard", icon: <Gauge size={17} /> },
@@ -190,6 +191,7 @@ const managerDrawerLinks: NavItem[] = [
     icon: <ClipboardPlus size={18} />,
   },
   { href: "/manager/calls", label: "Calls", icon: <Headphones size={18} /> },
+  { href: "/manager/messages", label: "Messages", icon: <MessageSquare size={18} /> },
 ];
 
 const teamLeaderDrawerLinks: NavItem[] = [
@@ -490,40 +492,48 @@ export function PortalShell({
                   type="button"
                 >
                   <Bell size={16} />
+                  {messagesFeed.count > 0 ? (
+                    <span className="customer-notif-dot">{messagesFeed.count > 9 ? "9+" : messagesFeed.count}</span>
+                  ) : null}
                 </button>
                 {notificationsOpen ? (
                   <div className="customer-notification-menu">
                     <div className="agent-popover-head">
                       <strong>Notifications</strong>
-                      <Link href="/customer/notifications">View all</Link>
+                      <Link href="/customer/messages">View all</Link>
                     </div>
-                    {[
-                      [
-                        "Request received",
-                        "Your newest service request is waiting for review.",
-                      ],
-                      [
-                        "Support messages",
-                        "Open Messages to continue a support conversation.",
-                      ],
-                      [
-                        "Profile reminder",
-                        "Keep your phone number and service address updated.",
-                      ],
-                    ].map(([heading, body]) => (
-                      <div
-                        className="customer-notification-menu-item"
-                        key={`${heading}-${body}`}
-                      >
+                    {messagesFeed.items.length ? (
+                      messagesFeed.items.slice(0, 6).map((item) => (
+                        <Link
+                          className="customer-notification-menu-item"
+                          href="/customer/messages"
+                          key={item.id}
+                          onClick={() => setNotificationsOpen(false)}
+                        >
+                          <span>
+                            <Bell size={14} />
+                          </span>
+                          <div>
+                            <strong>{item.label}</strong>
+                            <p>
+                              {item.unread
+                                ? `${item.unreadCount ?? 1} unread message${(item.unreadCount ?? 1) > 1 ? "s" : ""}`
+                                : "Open to view this conversation."}
+                            </p>
+                          </div>
+                        </Link>
+                      ))
+                    ) : (
+                      <div className="customer-notification-menu-item">
                         <span>
                           <Bell size={14} />
                         </span>
                         <div>
-                          <strong>{heading}</strong>
-                          <p>{body}</p>
+                          <strong>No new notifications</strong>
+                          <p>You&apos;re all caught up.</p>
                         </div>
                       </div>
-                    ))}
+                    )}
                   </div>
                 ) : null}
               </div>

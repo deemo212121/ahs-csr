@@ -1,7 +1,9 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Mic, MicOff, PhoneOff, Radio, ShieldCheck, Volume2, Wifi, WifiOff } from 'lucide-react';
+import { createPortal } from 'react-dom';
+import { Mic, MicOff, PhoneOff, PictureInPicture2, Radio, ShieldCheck, Volume2, Wifi, WifiOff, X } from 'lucide-react';
+import fixWebmDuration from 'fix-webm-duration';
 import { useAuth } from '@/components/AuthProvider';
 import { fetchJsonWithFirebase } from '@/lib/auth/client';
 import type { RtcCall, RtcSignal, RtcSignalType, IceServersResponse } from '@/lib/calls/types';
@@ -70,6 +72,7 @@ export function WebRtcCallRoom({ call, participantRole, onCallEnded, variant = '
   const recordingChunksRef = useRef<Blob[]>([]);
   const recordingContextRef = useRef<AudioContext | null>(null);
   const recordingNodesRef = useRef<MediaStreamAudioSourceNode[]>([]);
+  const recordingStartedAtRef = useRef<number | null>(null);
   // If the call was already accepted before this component mounted (e.g. this
   // side just refreshed mid-call), say "Reconnecting" instead of "Preparing" —
   // this is a resume, not a fresh join, and the other side's grace window is
@@ -198,8 +201,23 @@ export function WebRtcCallRoom({ call, participantRole, onCallEnded, variant = '
       recorder.onstop = () => {
         const blob = new Blob(recordingChunksRef.current, { type: recorder.mimeType || preferredMime || 'audio/webm' });
         recordingChunksRef.current = [];
-        void uploadRecording(blob);
+
+        // MediaRecorder writes webm without a Duration in the header — the
+        // browser has no way to know the total length upfront, so playback
+        // controls can't calculate seek positions and the scrub handle
+        // silently fails to drag. Patch it in from the wall-clock time we
+        // actually recorded for before uploading.
+        const startedAt = recordingStartedAtRef.current;
+        const duration = startedAt ? Date.now() - startedAt : 0;
+        if (blob.type.includes('webm') && duration > 0) {
+          fixWebmDuration(blob, duration)
+            .then((fixed) => uploadRecording(fixed))
+            .catch(() => uploadRecording(blob));
+        } else {
+          void uploadRecording(blob);
+        }
       };
+      recordingStartedAtRef.current = Date.now();
       recorder.start(1000);
       console.debug(`[webrtc:${participantRole}] recording started (connectionState was connected) at ${new Date().toISOString()}`);
       setRecordingStatus('recording');
@@ -642,13 +660,229 @@ export function WebRtcCallRoom({ call, participantRole, onCallEnded, variant = '
     return () => window.clearInterval(timer);
   }, [connectionState]);
 
-  function toggleMute() {
-    const nextMuted = !muted;
-    localStreamRef.current?.getAudioTracks().forEach((track) => {
-      track.enabled = !nextMuted;
+  const toggleMute = useCallback(() => {
+    setMuted((current) => {
+      const next = !current;
+      localStreamRef.current?.getAudioTracks().forEach((track) => {
+        track.enabled = !next;
+      });
+      return next;
     });
-    setMuted(nextMuted);
-  }
+  }, []);
+
+  // --- Floating window (OS-level Picture-in-Picture), only while on a call ---
+  // Two tiers, since standard <video> PiP has no way to host real buttons:
+  //  - Document PiP (Chrome/Brave/Edge only): a real floating window with
+  //    working Mute/End Call buttons, opened only via the "Pop out" button
+  //    below (browsers require an explicit click for this one).
+  //  - Canvas-fed <video> PiP with the `autopictureinpicture` attribute: the
+  //    browser opens/closes this one on its own the moment the tab is
+  //    backgrounded/foregrounded — no click needed — but it can only show
+  //    duration/mute status as painted pixels, not clickable controls.
+  const elapsedRef = useRef(0);
+  const mutedRef = useRef(muted);
+  useEffect(() => {
+    elapsedRef.current = elapsed;
+  }, [elapsed]);
+  useEffect(() => {
+    mutedRef.current = muted;
+  }, [muted]);
+
+  const [pipMode, setPipMode] = useState<'none' | 'document' | 'video'>('none');
+  const pipWindowRef = useRef<Window | null>(null);
+  const [pipContainer, setPipContainer] = useState<HTMLElement | null>(null);
+  const autoPipVideoRef = useRef<HTMLVideoElement | null>(null);
+  const autoPipCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const autoPipDrawTimerRef = useRef<number | null>(null);
+
+  const closeFloatingWindow = useCallback(() => {
+    if (pipWindowRef.current) {
+      pipWindowRef.current.close();
+      pipWindowRef.current = null;
+    }
+    setPipContainer(null);
+    if (typeof document !== 'undefined' && document.pictureInPictureElement) {
+      void document.exitPictureInPicture().catch(() => undefined);
+    }
+    setPipMode('none');
+  }, []);
+
+  const openDocumentPip = useCallback(async () => {
+    const dpip = (window as unknown as { documentPictureInPicture?: { requestWindow: (opts: { width: number; height: number }) => Promise<Window> } }).documentPictureInPicture;
+    if (!dpip) throw new Error('Not supported');
+
+    const pipWindow = await dpip.requestWindow({ width: 320, height: 96 });
+    pipWindowRef.current = pipWindow;
+
+    document.querySelectorAll('link[rel="stylesheet"], style').forEach((node) => {
+      pipWindow.document.head.appendChild(node.cloneNode(true));
+    });
+    pipWindow.document.body.style.margin = '0';
+
+    const container = pipWindow.document.createElement('div');
+    pipWindow.document.body.appendChild(container);
+    setPipContainer(container);
+    setPipMode('document');
+
+    pipWindow.addEventListener(
+      'pagehide',
+      () => {
+        pipWindowRef.current = null;
+        setPipContainer(null);
+        setPipMode('none');
+      },
+      { once: true },
+    );
+  }, []);
+
+  const openManualFloatingWindow = useCallback(async () => {
+    if (pipMode !== 'none') return;
+    try {
+      if ('documentPictureInPicture' in window) {
+        await openDocumentPip();
+        return;
+      }
+
+      // No Document PiP here (Safari, and every mobile browser today) — fall
+      // back to manually entering the same read-only canvas-fed video PiP
+      // the auto-background effect sets up, except triggered by this click
+      // (a real user gesture) instead of waiting for the tab to background.
+      // That's the "pop out" button mobile needs, since Android/iOS won't
+      // auto-enter PiP just from switching apps the way desktop Chrome will.
+      const video = autoPipVideoRef.current;
+      if (video && 'requestPictureInPicture' in video) {
+        await video.requestPictureInPicture();
+        setPipMode('video');
+        video.addEventListener(
+          'leavepictureinpicture',
+          () => setPipMode((current) => (current === 'video' ? 'none' : current)),
+          { once: true },
+        );
+      } else {
+        setRoomError('Pop-out isn’t supported in this browser.');
+      }
+    } catch (error) {
+      setRoomError(error instanceof Error ? error.message : 'Unable to open the floating call window.');
+    }
+  }, [openDocumentPip, pipMode]);
+
+  // Auto (no-click) read-only floating window, tied strictly to the tab
+  // being backgrounded while a call is actively connected.
+  useEffect(() => {
+    if (connectionState !== 'connected') return;
+    if (typeof HTMLVideoElement === 'undefined' || !('requestPictureInPicture' in HTMLVideoElement.prototype)) return;
+
+    const canvas = document.createElement('canvas');
+    canvas.width = 320;
+    canvas.height = 96;
+    autoPipCanvasRef.current = canvas;
+    const ctx = canvas.getContext('2d');
+
+    function draw() {
+      if (!ctx) return;
+      ctx.fillStyle = '#080240';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 26px sans-serif';
+      ctx.fillText(formatDuration(elapsedRef.current), 18, 44);
+      ctx.font = '15px sans-serif';
+      ctx.fillStyle = mutedRef.current ? '#f97373' : '#7dd3fc';
+      ctx.fillText(mutedRef.current ? 'Muted' : 'Live call', 18, 68);
+    }
+    draw();
+
+    const video = document.createElement('video');
+    video.muted = true;
+    video.playsInline = true;
+    (video as HTMLVideoElement & { autoPictureInPicture?: boolean }).autoPictureInPicture = true;
+    video.style.position = 'fixed';
+    video.style.width = '1px';
+    video.style.height = '1px';
+    video.style.opacity = '0';
+    video.style.pointerEvents = 'none';
+    document.body.appendChild(video);
+    autoPipVideoRef.current = video;
+
+    const stream = (canvas as HTMLCanvasElement & { captureStream: (fps?: number) => MediaStream }).captureStream(2);
+    video.srcObject = stream;
+    void video.play().catch(() => undefined);
+    autoPipDrawTimerRef.current = window.setInterval(draw, 500);
+
+    return () => {
+      if (autoPipDrawTimerRef.current) {
+        window.clearInterval(autoPipDrawTimerRef.current);
+        autoPipDrawTimerRef.current = null;
+      }
+      if (document.pictureInPictureElement === video) {
+        void document.exitPictureInPicture().catch(() => undefined);
+      }
+      video.remove();
+      autoPipVideoRef.current = null;
+      autoPipCanvasRef.current = null;
+    };
+  }, [connectionState]);
+
+  // Close any open interactive floating window once the call itself ends.
+  useEffect(() => {
+    if (connectionState === 'closed') closeFloatingWindow();
+  }, [closeFloatingWindow, connectionState]);
+  useEffect(() => () => closeFloatingWindow(), [closeFloatingWindow]);
+
+  // Chrome (desktop and Android) draws real, clickable Mute/End Call buttons
+  // directly into a standard <video> PiP window when the page registers
+  // these two Media Session actions — the one way to get working controls
+  // into "plain" video PiP without Document PiP. Each handler name throws if
+  // the browser doesn't recognize it (older/other browsers), so each is set
+  // independently rather than failing the whole block.
+  useEffect(() => {
+    if (connectionState !== 'connected' || typeof navigator === 'undefined' || !('mediaSession' in navigator)) return;
+    // Cast needed — these two call-specific actions aren't in TS's built-in
+    // MediaSessionAction union yet, though Chrome supports them at runtime.
+    const session = navigator.mediaSession as MediaSession & {
+      setActionHandler: (action: string, handler: (() => void) | null) => void;
+    };
+    try {
+      session.setActionHandler('hangup', () => void endCall());
+    } catch {
+      // Not supported in this browser — no-op.
+    }
+    try {
+      session.setActionHandler('togglemicrophone', () => toggleMute());
+    } catch {
+      // Not supported in this browser — no-op.
+    }
+    return () => {
+      try {
+        session.setActionHandler('hangup', null);
+      } catch {
+        // no-op
+      }
+      try {
+        session.setActionHandler('togglemicrophone', null);
+      } catch {
+        // no-op
+      }
+    };
+  }, [connectionState, endCall, toggleMute]);
+
+  // Keeps the mic icon's on/off state in the PiP window in sync with our
+  // own mute state, instead of only reacting to clicks made through it.
+  useEffect(() => {
+    if (typeof navigator === 'undefined' || !('mediaSession' in navigator)) return;
+    try {
+      (navigator.mediaSession as MediaSession & { setMicrophoneActive?: (active: boolean) => void }).setMicrophoneActive?.(!muted);
+    } catch {
+      // Not supported in this browser — no-op.
+    }
+  }, [muted]);
+
+  const canPopOut =
+    pipMode === 'none' &&
+    typeof window !== 'undefined' &&
+    ('documentPictureInPicture' in window ||
+      (connectionState === 'connected' &&
+        typeof HTMLVideoElement !== 'undefined' &&
+        'requestPictureInPicture' in HTMLVideoElement.prototype));
 
   // The <audio> element must stay mounted across variant switches (and even
   // in the "waiting" state) — it's what remoteAudioRef points at, and losing
@@ -732,7 +966,38 @@ export function WebRtcCallRoom({ call, participantRole, onCallEnded, variant = '
           <PhoneOff size={18} />
           End Call
         </button>
+        {canPopOut ? (
+          <button className="webrtc-control" onClick={() => void openManualFloatingWindow()} type="button">
+            <PictureInPicture2 size={18} />
+            Pop Out
+          </button>
+        ) : null}
+        {pipMode !== 'none' ? (
+          <button className="webrtc-control" onClick={closeFloatingWindow} type="button">
+            <X size={18} />
+            Close Pop-out
+          </button>
+        ) : null}
       </div>
+
+      {pipContainer
+        ? createPortal(
+            <div className="webrtc-floating-bar webrtc-floating-bar--pip">
+              <div className={`webrtc-floating-dot ${connectionState}`} />
+              <div className="webrtc-floating-copy">
+                <strong>{participantRole === 'customer' ? 'Support call' : call.customer_name || 'Live call'}</strong>
+                <small>{formatDuration(elapsed)} • {connectionState === 'connected' ? 'Connected' : status}</small>
+              </div>
+              <button className={`webrtc-floating-btn ${muted ? 'muted' : ''}`} onClick={toggleMute} type="button" aria-label={muted ? 'Unmute' : 'Mute'}>
+                {muted ? <MicOff size={15} /> : <Mic size={15} />}
+              </button>
+              <button className="webrtc-floating-btn danger" onClick={() => void endCall()} type="button" aria-label="End call">
+                <PhoneOff size={15} />
+              </button>
+            </div>,
+            pipContainer,
+          )
+        : null}
     </section>
   );
 }

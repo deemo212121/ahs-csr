@@ -9,7 +9,7 @@ import { BranchCheckboxDropdown } from '@/components/BranchCheckboxDropdown';
 import { ErTicketListTable } from '@/components/ErTicketListTable';
 import { erStatusText, filterErTickets, uniqueSorted } from '@/components/erTicketFilters';
 import { useBranchFilter } from '@/lib/useBranchFilter';
-import { BRANCHES } from '@/lib/branches';
+import { useBranches } from '@/lib/useBranches';
 
 export function TicketsPage() {
   const { requests, loading, error, refresh } = useLeadershipRequests(500, 'view=tickets');
@@ -17,9 +17,12 @@ export function TicketsPage() {
   const [status, setStatus] = useState('all');
   useLiveUpdate('verify', () => { void refresh(); });
 
-  const branchOptions = useMemo(() => [...BRANCHES], []);
+  const { branches: branchOptions } = useBranches();
   const { selectedBranches, setSelectedBranches } = useBranchFilter();
-  const filtered = useMemo(() => filterErTickets(requests, { search, status, branches: selectedBranches }), [requests, search, status, selectedBranches]);
+  const filtered = useMemo(
+    () => filterErTickets(requests, { search, status, branches: selectedBranches, knownBranches: branchOptions }),
+    [requests, search, status, selectedBranches, branchOptions],
+  );
   const statuses = useMemo(() => uniqueSorted(requests.map(erStatusText)), [requests]);
 
   const totals = useMemo(() => {

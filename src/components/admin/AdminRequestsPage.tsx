@@ -4,7 +4,10 @@ import { useMemo, useState } from 'react';
 import { CalendarDays, ClipboardList, List, RefreshCw, Search } from 'lucide-react';
 import { useLeadershipRequests } from '@/components/leadership/useLeadershipRequests';
 import { ErTicketListTable } from '@/components/ErTicketListTable';
+import { BranchCheckboxDropdown } from '@/components/BranchCheckboxDropdown';
 import { erStatusText, filterErTickets } from '@/components/erTicketFilters';
+import { useBranchFilter } from '@/lib/useBranchFilter';
+import { useBranches } from '@/lib/useBranches';
 
 function todayLabel() {
   return new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).format(new Date());
@@ -13,7 +16,12 @@ function todayLabel() {
 export function AdminRequestsPage() {
   const { requests, loading, error, refresh } = useLeadershipRequests(500, 'view=tickets');
   const [search, setSearch] = useState('');
-  const filtered = useMemo(() => filterErTickets(requests, { search }), [search, requests]);
+  const { branches: branchOptions } = useBranches();
+  const { selectedBranches, setSelectedBranches } = useBranchFilter();
+  const filtered = useMemo(
+    () => filterErTickets(requests, { search, branches: selectedBranches, knownBranches: branchOptions }),
+    [search, requests, selectedBranches, branchOptions],
+  );
 
   const total = requests.length;
   const acknowledged = requests.filter((request) => erStatusText(request) === 'Acknowledged').length;
@@ -62,6 +70,7 @@ export function AdminRequestsPage() {
             <Search size={18} />
             <input onChange={(event) => setSearch(event.target.value)} placeholder="Search ticket, model, location, status..." value={search} />
           </div>
+          <BranchCheckboxDropdown branches={branchOptions} selectedBranches={selectedBranches} onChange={setSelectedBranches} />
         </div>
         {error ? <div className="login-alert">{error}</div> : null}
         <ErTicketListTable requests={filtered} loading={loading} emptyMessage="No ER tickets found." />

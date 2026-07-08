@@ -88,7 +88,11 @@ export function CallSessionProvider({ children }: { children: React.ReactNode })
         container.style.left = `${rect.left}px`;
         container.style.width = `${rect.width}px`;
         container.style.height = `${rect.height}px`;
-        container.style.zIndex = '5';
+        // Above the fixed bottom nav bar (z-index 45 in globals.css) — the
+        // room's content can be taller than the anchor on small screens, and
+        // a lower z-index here let the nav bar render on top of and hide the
+        // overflowing Mute/Speaker/End Call controls.
+        container.style.zIndex = '50';
       } else {
         container.style.position = 'fixed';
         container.style.top = '0';

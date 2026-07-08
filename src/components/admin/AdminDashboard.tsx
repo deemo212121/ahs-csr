@@ -1,7 +1,7 @@
 'use client';
 
 import { Ban, BadgeCheck, Headphones } from 'lucide-react';
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   AdminPageHeader,
   AdminPanel,
@@ -9,12 +9,14 @@ import {
   type AdminStat,
 } from '@/components/admin/AdminUi';
 import {
-  getAdminMetrics,
   getTopAppliances,
   getTopBrands,
   getTopCities,
 } from '@/components/admin/adminData';
 import { useLeadershipRequests } from '@/components/leadership/useLeadershipRequests';
+import { useAuth } from '@/components/AuthProvider';
+import { fetchJsonWithFirebase } from '@/lib/auth/client';
+import type { RtcCallListResponse } from '@/lib/calls/types';
 
 function MetricList({ items }: { items: Array<{ label: string; value: number; helper?: string }> }) {
   const max = Math.max(...items.map((item) => item.value), 1);
@@ -40,13 +42,35 @@ function MetricList({ items }: { items: Array<{ label: string; value: number; he
 }
 
 export function AdminDashboard() {
+  const { user } = useAuth();
   const { requests, error } = useLeadershipRequests(500, 'view=tickets');
   // Verified/Rejected must reflect every team's verification decisions
   // company-wide, not just the live ER ticket board (which only holds
   // already-approved tickets and has no record of rejections at all).
   const { requests: allVerificationRequests, error: verificationError } = useLeadershipRequests(5000);
 
-  const overall = useMemo(() => getAdminMetrics(requests), [requests]);
+  // "Calls Handled" is the web-call (rtc_calls) feature, not the legacy
+  // ER ticket "calls" field getAdminMetrics reads — that field is basically
+  // always 0 for tickets created through the portal, which is why this tile
+  // showed 0 regardless of how many web calls staff had actually answered.
+  const [callsHandled, setCallsHandled] = useState(0);
+
+  useEffect(() => {
+    if (!user) return;
+    let cancelled = false;
+    fetchJsonWithFirebase<RtcCallListResponse>(user, '/api/calls?history=true&limit=2000')
+      .then((data) => {
+        if (cancelled || data.setup_required) return;
+        setCallsHandled(data.calls.filter((call) => call.status === 'completed').length);
+      })
+      .catch(() => {
+        // Leave the count at 0 rather than breaking the rest of the dashboard.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [user]);
+
   const topCities = useMemo(() => getTopCities(requests), [requests]);
   const topBrands = useMemo(() => getTopBrands(requests), [requests]);
   const topAppliances = useMemo(() => getTopAppliances(requests), [requests]);
@@ -63,7 +87,7 @@ export function AdminDashboard() {
   const totals: AdminStat[] = [
     { label: 'Verified', value: verifiedTotal, tone: 'green', icon: <BadgeCheck size={17} /> },
     { label: 'Rejected', value: rejectedTotal, tone: 'red', icon: <Ban size={17} /> },
-    { label: 'Calls Handled', value: overall.connectedCalls, tone: 'cyan', icon: <Headphones size={17} /> },
+    { label: 'Calls Handled', value: callsHandled, tone: 'cyan', icon: <Headphones size={17} /> },
   ];
 
   return (

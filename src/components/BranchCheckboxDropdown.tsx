@@ -30,8 +30,18 @@ export function BranchCheckboxDropdown({
   const searchInputRef = useRef<HTMLInputElement | null>(null);
 
   const options = useMemo(() => cleanBranches(branches), [branches]);
-  const selectedSet = useMemo(() => new Set(selectedBranches), [selectedBranches]);
-  const allSelected = options.length > 0 && selectedBranches.length === options.length;
+
+  // An empty saved selection means "all branches" everywhere this filter is
+  // read (see useBranchFilter's normalize()) — that's deliberate, so no page
+  // ever silently shows zero results. But it also means unchecking "All
+  // Branches" round-trips straight back to fully-checked the instant it
+  // saves, which reads as the checkbox refusing to uncheck. Tracking the
+  // display state locally (reset only when the menu opens) lets it uncheck
+  // and stay unchecked for the rest of this session, without changing what
+  // actually gets persisted/filtered.
+  const [displayedSelection, setDisplayedSelection] = useState(selectedBranches);
+  const selectedSet = useMemo(() => new Set(displayedSelection), [displayedSelection]);
+  const allSelected = options.length > 0 && displayedSelection.length === options.length;
 
   const filteredOptions = useMemo(() => {
     const term = search.trim().toLowerCase();
@@ -42,13 +52,13 @@ export function BranchCheckboxDropdown({
   const summary = useMemo(() => {
     if (!options.length) return 'No branches available';
     if (allSelected) return 'All Branches';
-    if (!selectedBranches.length) return 'No branches selected';
-    if (selectedBranches.length === 1) return selectedBranches[0];
-    return `${selectedBranches.length} branches selected`;
-  }, [allSelected, options.length, selectedBranches]);
+    if (!displayedSelection.length) return 'No branches selected';
+    if (displayedSelection.length === 1) return displayedSelection[0];
+    return `${displayedSelection.length} branches selected`;
+  }, [allSelected, options.length, displayedSelection]);
 
-  const selectedPreview = useMemo(() => selectedBranches.slice(0, 3), [selectedBranches]);
-  const hiddenSelectedCount = Math.max(0, selectedBranches.length - selectedPreview.length);
+  const selectedPreview = useMemo(() => displayedSelection.slice(0, 3), [displayedSelection]);
+  const hiddenSelectedCount = Math.max(0, displayedSelection.length - selectedPreview.length);
 
   useEffect(() => setMounted(true), []);
 
@@ -57,6 +67,7 @@ export function BranchCheckboxDropdown({
       setSearch('');
       return;
     }
+    setDisplayedSelection(cleanBranches(selectedBranches));
 
     const updateMenuPosition = () => {
       const rect = toggleRef.current?.getBoundingClientRect();
@@ -107,15 +118,18 @@ export function BranchCheckboxDropdown({
     };
   }, []);
 
-  const toggleAll = () => onChange(allSelected ? [] : options);
+  const toggleAll = () => {
+    const next = allSelected ? [] : options;
+    setDisplayedSelection(next);
+    onChange(next);
+  };
 
   const toggleBranch = (branch: string) => {
-    if (selectedSet.has(branch)) {
-      onChange(cleanBranches(selectedBranches.filter((item) => item !== branch)).filter((item) => options.includes(item)));
-      return;
-    }
-
-    onChange(cleanBranches([...selectedBranches, branch]).filter((item) => options.includes(item)));
+    const next = selectedSet.has(branch)
+      ? cleanBranches(displayedSelection.filter((item) => item !== branch)).filter((item) => options.includes(item))
+      : cleanBranches([...displayedSelection, branch]).filter((item) => options.includes(item));
+    setDisplayedSelection(next);
+    onChange(next);
   };
 
   const menu = open ? (
@@ -132,7 +146,7 @@ export function BranchCheckboxDropdown({
       <div className="branch-dropdown-menu-head">
         <div>
           <strong>Branch Filter</strong>
-          <span>{allSelected ? `${options.length} branches included` : `${selectedBranches.length} of ${options.length} selected`}</span>
+          <span>{allSelected ? `${options.length} branches included` : `${displayedSelection.length} of ${options.length} selected`}</span>
         </div>
         <button aria-label="Close branch filter" onClick={() => setOpen(false)} type="button">×</button>
       </div>

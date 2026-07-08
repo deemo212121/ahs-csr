@@ -8,7 +8,7 @@ import { BranchCheckboxDropdown } from '@/components/BranchCheckboxDropdown';
 import { ErTicketListTable } from '@/components/ErTicketListTable';
 import { erSourceText, erStatusText, filterErTickets, uniqueSorted } from '@/components/erTicketFilters';
 import { useBranchFilter } from '@/lib/useBranchFilter';
-import { BRANCHES } from '@/lib/branches';
+import { useBranches } from '@/lib/useBranches';
 
 export function CsrTicketsPage() {
   const { requests, loading, error, refresh } = useLeadershipRequests(500, 'view=tickets');
@@ -16,11 +16,11 @@ export function CsrTicketsPage() {
   const [status, setStatus] = useState('all');
   const [source, setSource] = useState('all');
 
-  const branchOptions = useMemo(() => [...BRANCHES], []);
+  const { branches: branchOptions } = useBranches();
   const { selectedBranches, setSelectedBranches } = useBranchFilter();
   const filtered = useMemo(
-    () => filterErTickets(requests, { search, status, branches: selectedBranches, source }),
-    [requests, search, status, selectedBranches, source],
+    () => filterErTickets(requests, { search, status, branches: selectedBranches, knownBranches: branchOptions, source }),
+    [requests, search, status, selectedBranches, branchOptions, source],
   );
   const statuses = useMemo(() => uniqueSorted(requests.map(erStatusText)), [requests]);
   const sources = useMemo(() => uniqueSorted(requests.map(erSourceText)), [requests]);

@@ -19,6 +19,13 @@ export async function GET(
 
     const { threadId } = await context.params;
     const result = await getThreadMessages(getSupabaseAdmin(), auth, threadId);
+    // Opening a thread is what actually marks it read server-side (see
+    // getThreadMessages) — ping so the nav badge (a separate poll/broadcast
+    // subscriber, not this page) reflects it immediately instead of waiting
+    // up to 25s for its next fallback poll. Only on the real unread->read
+    // transition, so background polling of an already-read open thread
+    // doesn't ping every 4 seconds.
+    if (result.justMarkedRead) await pingChannel(NOTIFY_CHANNELS.messages);
     return NextResponse.json(result);
   } catch (error) {
     return NextResponse.json(

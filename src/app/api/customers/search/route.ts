@@ -14,13 +14,19 @@ export async function GET(request: NextRequest) {
     }
 
     const supabaseAdmin = getSupabaseAdmin();
-    const { data, error } = await supabaseAdmin
+    let searchQuery = supabaseAdmin
       .from('profiles')
       .select('id, first_name, last_name, email, phone_number, address, city, state, zip_code, region')
       .eq('role', 'customer')
       .ilike('email', `%${query}%`)
       .order('email', { ascending: true })
       .limit(8);
+
+    if (context.profile.company_id) {
+      searchQuery = searchQuery.eq('company_id', context.profile.company_id);
+    }
+
+    const { data, error } = await searchQuery;
 
     if (error) throw new Error(error.message);
 

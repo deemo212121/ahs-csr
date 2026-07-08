@@ -257,6 +257,44 @@ async function resolveErCompanyId(erSupabase: SupabaseClient, portalRow?: Portal
   throw new Error('Missing company_id. Fill portal_service_requests.company_id, add ER_DEFAULT_COMPANY_ID to .env.local, or set an active company in ER companies.');
 }
 
+// Used as the fallback company for accounts that somehow don't have their
+// own company_id yet (should only happen for safety-net profile creation —
+// normal registration always saves a real choice). Reuses the exact same
+// resolution order the ER ticket-creation path already relied on.
+export async function resolveDefaultCompanyId(erSupabase: SupabaseClient): Promise<string> {
+  const { companyId } = await resolveErCompanyId(erSupabase);
+  return companyId;
+}
+
+export type ErCompanyOption = { id: string; name: string };
+
+// Read-only list of companies for the registration dropdown. The ER
+// `companies` table's exact column set isn't owned/defined by this repo, so
+// this selects everything and tries a handful of likely name-holding
+// columns rather than assuming one specific schema.
+export async function listErCompanies(erSupabase: SupabaseClient): Promise<ErCompanyOption[]> {
+  const tableName = process.env.ER_COMPANIES_TABLE?.trim() || 'companies';
+  const { data, error } = await erSupabase.from(tableName).select('*');
+  if (error) throw new Error(error.message);
+
+  const rows = (data ?? []) as Array<Record<string, unknown>>;
+  return rows
+    .filter((row) => row.is_active !== false)
+    .map((row) => {
+      const id = cleanUuidCandidate(row.id);
+      if (!id) return null;
+      const name =
+        (typeof row.name === 'string' && row.name.trim()) ||
+        (typeof row.company_name === 'string' && row.company_name.trim()) ||
+        (typeof row.display_name === 'string' && row.display_name.trim()) ||
+        (typeof row.title === 'string' && row.title.trim()) ||
+        `Company ${id.slice(0, 8)}`;
+      return { id, name };
+    })
+    .filter((option): option is ErCompanyOption => Boolean(option))
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
+
 function requireErSupabase() {
   if (!isErSupabaseConfigured()) {
     throw new Error('ER Supabase is not configured. Add ER_SUPABASE_URL and ER_SUPABASE_SERVICE_ROLE_KEY to .env.local.');
@@ -913,10 +951,12 @@ export async function listErTicketsViewOnly({
     .select(erTicketColumns)
     .limit(limit);
 
-  // By default, show all current rows in ER public.tickets.
-  // Set ER_TICKET_VIEW_COMPANY_ID only if the ER team wants the portal view limited to one company.
-  if (process.env.ER_TICKET_VIEW_COMPANY_ID?.trim()) {
-    query = query.eq('company_id', process.env.ER_TICKET_VIEW_COMPANY_ID.trim());
+  // Staff only ever see live ER tickets belonging to their own company.
+  // ER_TICKET_VIEW_COMPANY_ID remains as a global override for single-tenant
+  // deployments/testing, but the caller's own company_id takes precedence.
+  const companyFilter = context.profile.company_id || process.env.ER_TICKET_VIEW_COMPANY_ID?.trim();
+  if (companyFilter) {
+    query = query.eq('company_id', companyFilter);
   }
 
   query = query.order(orderColumn, { ascending: false });
@@ -988,8 +1028,9 @@ export async function listCustomerLinkedErTickets({
     .order(orderColumn, { ascending: false })
     .limit(limit);
 
-  if (process.env.ER_TICKET_VIEW_COMPANY_ID?.trim()) {
-    query = query.eq('company_id', process.env.ER_TICKET_VIEW_COMPANY_ID.trim());
+  const companyFilter = context.profile.company_id || process.env.ER_TICKET_VIEW_COMPANY_ID?.trim();
+  if (companyFilter) {
+    query = query.eq('company_id', companyFilter);
   }
 
   const { data, error } = await query;
@@ -1059,6 +1100,9 @@ export async function listErModeRequests({
 
   if (context.role === 'customer') {
     query = query.eq('portal_customer_profile_id', context.profile.id);
+  } else if (context.profile.company_id) {
+    // Staff only ever see portal requests submitted for their own company.
+    query = query.eq('company_id', context.profile.company_id);
   }
 
   const { data, error } = await query;
@@ -1070,12 +1114,17 @@ export async function createErModePortalRequest(context: AuthContext, body: Crea
   const erSupabase = requireErSupabase();
   const isCustomer = context.role === 'customer';
   const erStaffSupabase = isCustomer ? null : await getErSupabaseForStaff(context);
-  const company = await resolveErCompanyId(erSupabase);
+  // Every account (customer or staff) now carries its own company_id — use
+  // that directly so a ticket belongs to the submitter's actual company
+  // instead of one single global default. Only falls back to the old
+  // global-resolution logic for the rare account that predates this and
+  // has no company_id yet.
+  const companyId = context.profile.company_id || (await resolveErCompanyId(erSupabase)).companyId;
 
   const { data, error } = await erSupabase
     .from(getPortalRequestsTable())
     .insert({
-      company_id: company.companyId,
+      company_id: companyId,
       portal_customer_profile_id: isCustomer ? context.profile.id : null,
       portal_customer_email: context.profile.email || null,
       request_number: requestNumber(),
@@ -1105,7 +1154,7 @@ export async function createErModePortalRequest(context: AuthContext, body: Crea
       preferred_time: body.preferred_time || null,
       purchase_date: body.purchase_date || null,
       warranty_type: body.warranty_type || null,
-      verification_notes: `Created from portal. company_id source: ${company.source}.`,
+      verification_notes: `Created from portal. company_id source: ${context.profile.company_id ? 'submitter profile' : 'ER default fallback'}.`,
     })
     .select(portalRequestColumns)
     .single();

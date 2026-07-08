@@ -3,6 +3,8 @@
 import { Save, UserRound } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useAuth } from '@/components/AuthProvider';
+import { BiometricSettingsCard } from '@/components/BiometricSettingsCard';
+import { PushNotificationToggle } from '@/components/PushNotificationToggle';
 import { fetchJsonWithFirebase } from '@/lib/auth/client';
 import { US_STATES } from '@/lib/data/usStates';
 
@@ -199,6 +201,13 @@ export function CustomerProfilePage() {
       </section>
 
       {showSavedToast ? <div className="cx-saved-toast">Saved profile</div> : null}
+      <section className="cx-edit-profile-card cx-biometric-card">
+        <div className="cx-card-title">
+          <strong>Notifications</strong>
+        </div>
+        <PushNotificationToggle />
+      </section>
+      <BiometricSettingsCard />
     </div>
   );
 }

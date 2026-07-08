@@ -10,9 +10,10 @@ import {
   type NotificationSettings as NotificationSettingsValue,
 } from '@/lib/notifications/settings';
 import { previewNotificationSound } from '@/lib/notifications/sounds';
-import { BRANCHES } from '@/lib/branches';
+import { useBranches } from '@/lib/useBranches';
 import { useBranchFilter } from '@/lib/useBranchFilter';
 import { BranchCheckboxDropdown } from '@/components/BranchCheckboxDropdown';
+import { PushNotificationToggle } from '@/components/PushNotificationToggle';
 
 const CATEGORY_LABELS: Record<NotificationCategory, string> = {
   verify: 'New Tickets',
@@ -24,6 +25,7 @@ export function NotificationSettings() {
   const [open, setOpen] = useState(false);
   const [settings, setSettings] = useState<NotificationSettingsValue>(DEFAULT_NOTIFICATION_SETTINGS);
   const { selectedBranches, applyBranches } = useBranchFilter();
+  const { branches: allBranches } = useBranches();
   const [pendingBranches, setPendingBranches] = useState(selectedBranches);
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
 
@@ -35,8 +37,16 @@ export function NotificationSettings() {
     setPendingBranches(selectedBranches);
   }, [selectedBranches]);
 
-  const isDirty = pendingBranches.length !== selectedBranches.length
-    || pendingBranches.some((branch) => !selectedBranches.includes(branch));
+  // An empty selection and "every branch checked" are the same saved state
+  // in this app (see useBranchFilter's normalize()) — comparing them as
+  // literally different values here was what made "Save filter" with
+  // nothing checked immediately flip back to "Unsaved changes": it saves
+  // correctly, but the just-saved value comes back as "all branches" (not
+  // empty), which no longer matched the still-empty pending selection.
+  function dirtyKey(list: string[]) {
+    return (list.length === 0 || list.length === allBranches.length) ? '__all__' : [...list].sort().join('|');
+  }
+  const isDirty = dirtyKey(pendingBranches) !== dirtyKey(selectedBranches);
 
   async function saveBranches() {
     setSaveState('saving');
@@ -85,6 +95,10 @@ export function NotificationSettings() {
             />
           </label>
 
+          <div className="notification-settings-row notification-settings-push-row">
+            <PushNotificationToggle />
+          </div>
+
           <div className="notification-settings-volume">
             {settings.volume === 0 ? <VolumeX size={15} /> : <Volume2 size={15} />}
             <input
@@ -125,7 +139,7 @@ export function NotificationSettings() {
             <p className="notification-settings-filter-hint">
               This is your primary branch filter — it controls Tickets, Verify, Messages, and Calls / Call History too.
             </p>
-            <BranchCheckboxDropdown branches={[...BRANCHES]} selectedBranches={pendingBranches} onChange={setPendingBranches} />
+            <BranchCheckboxDropdown branches={allBranches} selectedBranches={pendingBranches} onChange={setPendingBranches} />
             <div className="notification-settings-filter-save-row">
               <button
                 className="notification-settings-save-btn"

@@ -1,20 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { z } from 'zod';
-import { getAuthContext, requireRole } from '@/lib/auth/server';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { getErSupabaseAdmin, isErSupabaseConfigured } from '@/lib/supabase/er-admin';
 
 const serviceAreaSelect = 'id, legacy_id, zip_code, city, state, region, is_active, created_at, updated_at';
 const erLocationCoverageSelect = 'id, company_id, legacy_id, location, zip_code, city, self_schedule, days_later, tier_code, created_at, updated_at';
 const erLocationsSelect = 'id, company_id, legacy_id, location, address1, address2, city, state, zip_code, office, office_location, coordinates, phone_no, email, available_days, available_time_slot, created_at, updated_at';
-
-const upsertServiceAreaSchema = z.object({
-  zip_code: z.string().regex(/^\d{5}$/, 'ZIP code must be 5 digits.'),
-  city: z.string().min(2),
-  state: z.string().min(2),
-  region: z.string().min(2),
-  is_active: z.boolean().optional().default(true),
-});
 
 type ErLocationCoverageRow = Record<string, unknown>;
 type ErLocationRow = Record<string, unknown>;
@@ -46,6 +36,26 @@ function getErCoverageCompanyId() {
     process.env.ER_DEFAULT_COMPANY_ID?.trim() ||
     ''
   );
+}
+
+// Optional fast path: a read-only Postgres function in the ER database
+// (distinct_location_coverage — see supabase/er_distinct_location_coverage_setup.sql)
+// that returns one pre-deduplicated row per zip in a single round-trip,
+// instead of paging through the full ~127k-row table. Only used for the
+// "list every zip" case (no zip/search filter) — that's the one that needs
+// the whole table; a single-zip lookup is already cheap as-is. Falls back
+// silently to the existing capped pagination if the function hasn't been
+// created yet, so nothing breaks for anyone who hasn't run that SQL.
+async function tryDistinctCoverageRpc(companyId: string): Promise<ErLocationCoverageRow[] | null> {
+  const erSupabase = getErSupabaseAdmin();
+  if (!erSupabase) return null;
+  try {
+    const { data, error } = await erSupabase.rpc('distinct_location_coverage', { p_company_id: companyId });
+    if (error || !Array.isArray(data)) return null;
+    return data as ErLocationCoverageRow[];
+  } catch {
+    return null;
+  }
 }
 
 function normalizeKey(value: unknown) {
@@ -163,19 +173,41 @@ function buildErLocationsQuery(options: { zip: string; q: string }) {
   return query;
 }
 
+// ER's location_mgmt_coverage table runs well into six figures of rows (one
+// row per zip per schedule slot/tier, not one row per zip) — fetching that
+// serially, one 1000-row page at a time, would mean 100+ sequential
+// round-trips and take tens of seconds. Pages within a batch are independent
+// range queries, so fire a bounded batch of them concurrently and only stop
+// issuing further batches once a page in the batch comes back short (the
+// real end of the data), instead of paging one request at a time.
 async function getPagedRows<T>(buildQuery: () => any, limit: number) {
   const pageSize = 1000;
+  const batchConcurrency = 25;
   const rows: T[] = [];
+  let offset = 0;
+  let reachedEnd = false;
 
-  for (let from = 0; from < limit; from += pageSize) {
-    const to = Math.min(from + pageSize - 1, limit - 1);
-    const { data, error } = await buildQuery().range(from, to);
-    if (error) throw new Error(error.message);
+  while (offset < limit && !reachedEnd) {
+    const batchStarts: number[] = [];
+    for (let i = 0; i < batchConcurrency && offset + i * pageSize < limit; i++) {
+      batchStarts.push(offset + i * pageSize);
+    }
 
-    const page = (data ?? []) as T[];
-    rows.push(...page);
+    const pages = await Promise.all(
+      batchStarts.map(async (from) => {
+        const to = Math.min(from + pageSize - 1, limit - 1);
+        const { data, error } = await buildQuery().range(from, to);
+        if (error) throw new Error(error.message);
+        return (data ?? []) as T[];
+      }),
+    );
 
-    if (page.length < pageSize) break;
+    for (const page of pages) {
+      rows.push(...page);
+      if (page.length < pageSize) reachedEnd = true;
+    }
+
+    offset += batchStarts.length * pageSize;
   }
 
   return rows;
@@ -195,8 +227,20 @@ function deduplicateLocations(rows: ErLocationRow[]) {
 }
 
 async function getMergedErServiceAreas(options: { zip: string; q: string; activeOnly: boolean; limit: number }) {
+  // The "list every zip" case (no zip/search filter) is the one that needs
+  // the whole ~127k-row table — try the single-round-trip RPC first (see
+  // supabase/er_distinct_location_coverage_setup.sql) and only fall back to
+  // paging through the capped, possibly-incomplete slice if that function
+  // hasn't been created in ER yet.
+  const companyId = getErCoverageCompanyId();
+  const wantsFullList = !options.zip && !options.q;
+  const rpcRows = wantsFullList && companyId ? await tryDistinctCoverageRpc(companyId) : null;
+  const coverageRowsSource = rpcRows
+    ? (options.activeOnly ? rpcRows.filter((row) => cleanText(row.self_schedule) !== '0') : rpcRows)
+    : null;
+
   const [coverageRows, rawLocationRows] = await Promise.all([
-    getPagedRows<ErLocationCoverageRow>(() => buildErCoverageQuery(options), options.limit),
+    coverageRowsSource ?? getPagedRows<ErLocationCoverageRow>(() => buildErCoverageQuery(options), options.limit),
     getPagedRows<ErLocationRow>(() => buildErLocationsQuery(options), 1000),
   ]);
   const locations = deduplicateLocations(rawLocationRows);
@@ -255,7 +299,9 @@ async function getMergedErServiceAreas(options: { zip: string; q: string; active
   return {
     service_areas: serviceAreas,
     locations,
-    source: 'er_location_mgmt_coverage_and_locations',
+    source: coverageRowsSource
+      ? 'er_location_mgmt_coverage_rpc_and_locations'
+      : 'er_location_mgmt_coverage_and_locations',
     dedupe: {
       coverage_rows_loaded: coverageRows.length,
       location_rows_loaded: rawLocationRows.length,
@@ -265,6 +311,7 @@ async function getMergedErServiceAreas(options: { zip: string; q: string; active
       unique_locations: locations.length,
       location_duplicates_removed: Math.max(0, rawLocationRows.length - locations.length),
       added_location_zip_rows: addedLocationZipRows,
+      used_rpc_fast_path: Boolean(coverageRowsSource),
     },
   };
 }
@@ -284,7 +331,15 @@ export async function GET(request: NextRequest) {
     const zip = sanitizeSearch(url.searchParams.get('zip')).replace(/\D/g, '').slice(0, 5);
     const q = sanitizeSearch(url.searchParams.get('q'));
     const activeOnly = url.searchParams.get('active') !== 'false';
-    const limit = Math.min(Math.max(Number(url.searchParams.get('limit') ?? (zip ? 25 : 6000)), 1), 15000);
+    // ER's location_mgmt_coverage table can run into six figures of rows for
+    // a single company (many rows per zip — one per schedule slot/tier, not
+    // one per zip). PostgREST hard-caps each request at 1000 rows and
+    // Cloudflare caps how many outbound requests a single Worker invocation
+    // can make, so fetching the *entire* table this way isn't possible no
+    // matter how it's batched. This cap only matters as a fallback now — see
+    // getMergedErServiceAreas's RPC fast path (distinct_location_coverage),
+    // which fetches the full deduplicated set in one round-trip instead.
+    const limit = Math.min(Math.max(Number(url.searchParams.get('limit') ?? (zip ? 25 : 6000)), 1), 40000);
 
     const result = await getServiceAreas({ zip, q, activeOnly, limit });
 
@@ -292,44 +347,6 @@ export async function GET(request: NextRequest) {
   } catch (error) {
     return NextResponse.json(
       { message: error instanceof Error ? error.message : 'Unable to load service areas.' },
-      { status: 400 },
-    );
-  }
-}
-
-export async function POST(request: NextRequest) {
-  try {
-    const context = await getAuthContext(request);
-    requireRole(context, ['admin']);
-
-    if (useErLocationCoverage()) {
-      throw new Error('This portal is currently reading Cities from ER location_mgmt_coverage in view-only mode. Update locations inside the ER system.');
-    }
-
-    const body = upsertServiceAreaSchema.parse(await request.json());
-    const supabaseAdmin = getSupabaseAdmin();
-
-    const { data, error } = await supabaseAdmin
-      .from('service_areas')
-      .upsert(
-        {
-          zip_code: body.zip_code,
-          city: body.city.trim(),
-          state: body.state.trim(),
-          region: body.region.trim(),
-          is_active: body.is_active,
-        },
-        { onConflict: 'zip_code,city,state,region' },
-      )
-      .select(serviceAreaSelect)
-      .single();
-
-    if (error) throw new Error(error.message);
-
-    return NextResponse.json({ service_area: data }, { status: 201 });
-  } catch (error) {
-    return NextResponse.json(
-      { message: error instanceof Error ? error.message : 'Unable to save service area.' },
       { status: 400 },
     );
   }

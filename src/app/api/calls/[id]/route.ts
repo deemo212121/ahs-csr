@@ -3,6 +3,8 @@ import { z } from 'zod';
 import { getAuthContext, requireRole, type AuthContext } from '@/lib/auth/server';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { NOTIFY_CHANNELS, pingChannel } from '@/lib/notifications/broadcast';
+import { sendPushToProfile } from '@/lib/push/send';
+import { mapCallRow, text } from '@/lib/calls/mapCallRow';
 
 const callSelect = `
   id,
@@ -20,14 +22,9 @@ const callSelect = `
 `;
 
 const patchSchema = z.object({
-  action: z.enum(['accept', 'start', 'end', 'cancel', 'heartbeat', 'add_note']),
+  action: z.enum(['accept', 'start', 'end', 'cancel', 'heartbeat']),
   reason: z.string().max(240).optional(),
-  note: z.string().max(1000).optional(),
 });
-
-function text(value: unknown) {
-  return typeof value === 'string' && value.trim() ? value.trim() : '';
-}
 
 function staffProfileKey(context: AuthContext) {
   return `${context.profileSource}:${context.profile.id}`;
@@ -122,22 +119,6 @@ export async function PATCH(
       if (isCustomerOwner && !call.customer_joined_at) updates.customer_joined_at = now;
     }
 
-    if (body.action === 'add_note') {
-      requireRole(auth, ['csr', 'team_leader', 'csr_manager', 'admin']);
-      if (text(call.status) !== 'completed') {
-        throw new Error('Notes can only be added to a completed call.');
-      }
-      if (call.accepted_by_profile_id !== staffProfileKey(auth)) {
-        throw new Error('Only the CSR who answered this call can add a note.');
-      }
-      if (text(call.notes)) {
-        throw new Error('A note has already been added to this call and cannot be changed.');
-      }
-      const note = (body.note || '').trim();
-      if (!note) throw new Error('Note cannot be empty.');
-      updates = { notes: note };
-    }
-
     if (body.action === 'end' || body.action === 'cancel') {
       if (!isCustomerOwner && !isStaff) throw new Error('You do not have access to end this call.');
       const finalStatus = body.action === 'cancel' && isCustomerOwner && !call.call_started_at ? 'cancelled' : 'completed';
@@ -162,7 +143,20 @@ export async function PATCH(
     if (body.action === 'accept' || body.action === 'end' || body.action === 'cancel') {
       await pingChannel(NOTIFY_CHANNELS.calls);
     }
-    return NextResponse.json({ call: data });
+
+    if (body.action === 'accept' && call.customer_id) {
+      try {
+        await sendPushToProfile(supabaseAdmin, call.customer_id, 'local', {
+          title: 'Your call is connecting',
+          body: `${displayName(auth)} is joining your call now.`,
+          url: '/customer/calls',
+        });
+      } catch {
+        // Best-effort — never block the call being accepted over this.
+      }
+    }
+
+    return NextResponse.json({ call: mapCallRow(data) });
   } catch (error) {
     const setupMessage = missingCallSchemaMessage(error);
     return NextResponse.json(

@@ -5,10 +5,11 @@ import { usePathname } from 'next/navigation';
 import {
   Bell,
   BookOpenText,
-  Building2,
   ClipboardList,
   LayoutDashboard,
+  ListFilter,
   LogOut,
+  MapPin,
   MapPinned,
   Menu,
   X,
@@ -31,9 +32,10 @@ const navItems = [
   { href: '/admin/staff', label: 'Staff Management', icon: UserRoundCog },
   { href: '/admin/requests', label: 'Requests', icon: ClipboardList },
   { href: '/admin/calls', label: 'Calls', icon: PhoneCall },
-  { href: '/admin/cities', label: 'Cities', icon: Building2 },
   { href: '/admin/customers', label: 'Customers', icon: Users },
   { href: '/admin/branch-assignments', label: 'Branch Assignment', icon: MapPinned },
+  { href: '/admin/branches', label: 'Branches', icon: MapPin },
+  { href: '/admin/filter-management', label: 'Filter Management', icon: ListFilter },
   { href: '/admin/appliances', label: 'Appliances', icon: Wrench },
   { href: '/admin/brands', label: 'Brands', icon: Tags },
   { href: '/admin/activity-logs', label: 'Activity Logs', icon: BookOpenText },
@@ -99,11 +101,6 @@ export function AdminShell({
       title: 'Warnings and mistakes',
       body: 'Review recent discipline records for agents and teams.',
       href: '/admin/warning',
-    },
-    {
-      title: 'Coverage records',
-      body: 'Open ER-based city and ZIP coverage records.',
-      href: '/admin/cities',
     },
   ];
 

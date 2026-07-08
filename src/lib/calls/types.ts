@@ -41,6 +41,15 @@ export type RtcCall = {
   created_at: string;
 };
 
+export type CallNote = {
+  id: string;
+  call_id: string;
+  author_profile_id: string;
+  author_name: string | null;
+  note: string;
+  created_at: string;
+};
+
 export type RtcCallListResponse = {
   calls: RtcCall[];
   branches: string[];

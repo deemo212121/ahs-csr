@@ -98,10 +98,14 @@ export async function GET(request: NextRequest) {
     let query = supabaseAdmin
       .from('service_requests')
       .select(
-        'id, legacy_id, customer_id, request_number, ticket_source, source_system, origin_type, er_ticket_id, full_name, phone_number, secondary_phone, customer_email, service_address, service_address_2, city, region, state, zip_code, landmark, manual_brand, manual_appliance_type, model_number, serial_number, product_model_version, issue_description, special_request, preferred_date, preferred_time, purchase_date, warranty_type, job_status_id, verification_status, verification_reject_reason, verification_notes, verification_reviewed_by, sync_status, sync_error, last_synced_at, requested_at, updated_at, brand:brands(name, legacy_id), appliance_type:appliance_types(name, legacy_id), job_status:job_statuses(status_name, color_code, legacy_id)',
+        'id, legacy_id, customer_id, company_id, request_number, ticket_source, source_system, origin_type, er_ticket_id, full_name, phone_number, secondary_phone, customer_email, service_address, service_address_2, city, region, state, zip_code, landmark, manual_brand, manual_appliance_type, model_number, serial_number, product_model_version, issue_description, special_request, preferred_date, preferred_time, purchase_date, warranty_type, job_status_id, verification_status, verification_reject_reason, verification_notes, verification_reviewed_by, sync_status, sync_error, last_synced_at, requested_at, updated_at, brand:brands(name, legacy_id), appliance_type:appliance_types(name, legacy_id), job_status:job_statuses(status_name, color_code, legacy_id)',
       )
       .order('requested_at', { ascending: false })
       .limit(limit);
+
+    if (context.profile.company_id) {
+      query = query.eq('company_id', context.profile.company_id);
+    }
 
     if (verification) {
       query = query.eq('verification_status', verification);
@@ -177,6 +181,7 @@ export async function POST(request: NextRequest) {
       .insert({
         request_number: !isCustomer && body.request_number?.trim() ? body.request_number.trim() : requestNumber(),
         customer_id: isCustomer ? context.profile.id : null,
+        company_id: context.profile.company_id,
         created_by_profile_id: isCustomer ? null : localProfileId(context),
         ticket_source: isCustomer ? body.ticket_source || 'cx_online' : 'csr_manual',
         source_system: isCustomer ? 'php_cx' : 'php_csr',
